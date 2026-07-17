@@ -9,9 +9,13 @@ from nice_pro.models.market import (
     OptionType,
     Quote,
     Side,
+    ConvictionSnapshot,
+    TradeGrade,
+    TradePlan,
 )
 
 __all__ = [
     "Candle", "IndicatorSnapshot", "MarketRegime", "MarketSnapshot", "OptionChainSnapshot",
-    "OptionContract", "OptionMetric", "OptionType", "Quote", "Side",
+    "OptionContract", "OptionMetric", "OptionType", "Quote", "Side", "ConvictionSnapshot",
+    "TradeGrade", "TradePlan",
 ]

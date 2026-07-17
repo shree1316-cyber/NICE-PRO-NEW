@@ -110,6 +110,7 @@ class KiteService:
                     expiry=item["expiry"],
                     strike=strike,
                     option_type=OptionType(item["instrument_type"]),
+                    lot_size=int(item.get("lot_size") or 1),
                 )
             )
         return contracts

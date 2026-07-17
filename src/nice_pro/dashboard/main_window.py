@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import QApplication, QFrame, QGridLayout, QLabel, QMainWindow, QVBoxLayout, QWidget
 
-from nice_pro.models.market import IndicatorSnapshot, MarketSnapshot, OptionChainSnapshot
+from nice_pro.models.market import ConvictionSnapshot, IndicatorSnapshot, MarketSnapshot, OptionChainSnapshot
 
 if TYPE_CHECKING:
     from nice_pro.core.application import Application
@@ -15,6 +15,7 @@ class DashboardSignals(QObject):
     snapshot = Signal(object)
     analysis = Signal(object)
     options = Signal(object)
+    conviction = Signal(object)
     status = Signal(str)
 
 
@@ -26,10 +27,12 @@ class MainWindow(QMainWindow):
         self._signals.snapshot.connect(self.update_snapshot)
         self._signals.analysis.connect(self.update_analysis)
         self._signals.options.connect(self.update_options)
+        self._signals.conviction.connect(self.update_conviction)
         self._signals.status.connect(self.update_status)
         application.add_snapshot_listener(self._signals.snapshot.emit)
         application.add_analysis_listener(self._signals.analysis.emit)
         application.add_option_listener(self._signals.options.emit)
+        application.add_conviction_listener(self._signals.conviction.emit)
         application.add_status_listener(self._signals.status.emit)
         self.setWindowTitle("NICE-PRO | Intraday Conviction Engine")
         self.resize(1280, 760)
@@ -58,6 +61,10 @@ class MainWindow(QMainWindow):
         self._sensex_options = self._card("SENSEX Options", "Waiting for ATM option discovery")
         cards.addWidget(self._nifty_options[0], 2, 0)
         cards.addWidget(self._sensex_options[0], 2, 1)
+        self._nifty_conviction = self._card("NIFTY Conviction", "Waiting for aligned market and option evidence")
+        self._sensex_conviction = self._card("SENSEX Conviction", "Waiting for aligned market and option evidence")
+        cards.addWidget(self._nifty_conviction[0], 3, 0)
+        cards.addWidget(self._sensex_conviction[0], 3, 1)
         layout.addLayout(cards)
         layout.addStretch()
         self.setCentralWidget(root)
@@ -109,6 +116,23 @@ class MainWindow(QMainWindow):
             if ivs:
                 values.append(f"Model IV range {min(ivs):.1f}%–{max(ivs):.1f}%")
         label.setText("\n".join(values))
+
+    def update_conviction(self, snapshot: ConvictionSnapshot) -> None:
+        label = self._nifty_conviction[1] if snapshot.underlying == "NIFTY" else self._sensex_conviction[1]
+        values = [
+            f"<b>{snapshot.grade} | {snapshot.side}</b> | Confidence {snapshot.confidence}%",
+            f"<span style='color:#22c55e'>Bullish {snapshot.bullish_score}: {'; '.join(snapshot.bullish_reasons[:2]) or '—'}</span>",
+            f"<span style='color:#ef4444'>Bearish {snapshot.bearish_score}: {'; '.join(snapshot.bearish_reasons[:2]) or '—'}</span>",
+        ]
+        if snapshot.conflicts:
+            values.append(f"<span style='color:#fbbf24'>Caution: {snapshot.conflicts[0]}</span>")
+        if snapshot.plan is not None:
+            plan = snapshot.plan
+            values.append(
+                f"<b>PAPER ONLY</b> {plan.option_symbol} | Entry {plan.entry:.2f} | SL {plan.stop_loss:.2f} | "
+                f"T1 {plan.target_1:.2f} | T2 {plan.target_2:.2f} | Max loss/lot ₹{plan.max_loss_per_lot:.0f}"
+            )
+        label.setText("<br>".join(values))
 
     def closeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         self._application.stop()

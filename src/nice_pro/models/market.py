@@ -36,6 +36,14 @@ class OptionType(StrEnum):
     PUT = "PE"
 
 
+class TradeGrade(StrEnum):
+    A_PLUS = "A+"
+    A = "A"
+    B = "B"
+    C = "C"
+    AVOID = "AVOID"
+
+
 @dataclass(frozen=True, slots=True)
 class OptionContract:
     instrument_token: int
@@ -44,6 +52,7 @@ class OptionContract:
     expiry: date
     strike: float
     option_type: OptionType
+    lot_size: int = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +73,35 @@ class OptionChainSnapshot:
     atm_strike: float | None
     put_call_ratio_oi: float | None
     metrics: tuple[OptionMetric, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class TradePlan:
+    underlying: str
+    side: Side
+    option_symbol: str
+    entry: float
+    stop_loss: float
+    target_1: float
+    target_2: float
+    max_loss_per_lot: float
+    lot_size: int
+    note: str = "Paper-trade setup only; no order is submitted."
+
+
+@dataclass(frozen=True, slots=True)
+class ConvictionSnapshot:
+    underlying: str
+    calculated_at: datetime
+    side: Side
+    bullish_score: int
+    bearish_score: int
+    confidence: int
+    grade: TradeGrade
+    bullish_reasons: tuple[str, ...] = ()
+    bearish_reasons: tuple[str, ...] = ()
+    conflicts: tuple[str, ...] = ()
+    plan: TradePlan | None = None
 
 
 @dataclass(frozen=True, slots=True)

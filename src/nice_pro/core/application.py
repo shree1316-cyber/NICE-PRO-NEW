@@ -6,15 +6,17 @@ from time import sleep
 
 from loguru import logger
 
+from nice_pro.alerts.quality import QualityAlertEngine
 from nice_pro.config.settings import Settings
 from nice_pro.core.events import EventBus
 from nice_pro.core.logging import configure_logging
+from nice_pro.engines.conviction import ConvictionEngine
 from nice_pro.engines.history import CandleHistory
 from nice_pro.engines.indicators import IndicatorEngine
 from nice_pro.engines.market_data import MarketDataEngine
 from nice_pro.engines.market_state import MarketState
 from nice_pro.engines.options import OptionChainEngine
-from nice_pro.models.market import IndicatorSnapshot, MarketSnapshot, OptionChainSnapshot, Quote
+from nice_pro.models.market import ConvictionSnapshot, IndicatorSnapshot, MarketSnapshot, OptionChainSnapshot, Quote
 from nice_pro.services.kite import KiteService
 
 
@@ -27,10 +29,15 @@ class Application:
         self.history = CandleHistory()
         self.indicators = IndicatorEngine()
         self.options = OptionChainEngine()
+        self.conviction = ConvictionEngine()
+        self.alerts = QualityAlertEngine()
         self.kite = KiteService(settings)
+        self._analysis_by_underlying: dict[str, IndicatorSnapshot] = {}
+        self._options_by_underlying: dict[str, OptionChainSnapshot] = {}
         self._snapshot_listeners: list[Callable[[MarketSnapshot], None]] = []
         self._analysis_listeners: list[Callable[[IndicatorSnapshot], None]] = []
         self._option_listeners: list[Callable[[OptionChainSnapshot], None]] = []
+        self._conviction_listeners: list[Callable[[ConvictionSnapshot], None]] = []
         self._status_listeners: list[Callable[[str], None]] = []
 
     def add_snapshot_listener(self, listener: Callable[[MarketSnapshot], None]) -> None:
@@ -41,6 +48,9 @@ class Application:
 
     def add_option_listener(self, listener: Callable[[OptionChainSnapshot], None]) -> None:
         self._option_listeners.append(listener)
+
+    def add_conviction_listener(self, listener: Callable[[ConvictionSnapshot], None]) -> None:
+        self._conviction_listeners.append(listener)
 
     def add_status_listener(self, listener: Callable[[str], None]) -> None:
         self._status_listeners.append(listener)
@@ -89,7 +99,6 @@ class Application:
         self.publish_status("live quote stream active")
 
     def _discover_atm_options(self) -> None:
-        """Wait for each index spot price, then subscribe to a narrow ATM option universe."""
         for subscription in self.settings.subscriptions:
             underlying = "NIFTY" if "NIFTY" in subscription.symbol else "SENSEX"
             for _ in range(30):
@@ -123,12 +132,29 @@ class Application:
 
     def _publish_analysis(self, symbol: str) -> None:
         snapshot = self.indicators.evaluate(symbol, self.history.for_symbol(symbol))
+        underlying = "NIFTY" if "NIFTY" in symbol else "SENSEX"
+        self._analysis_by_underlying[underlying] = snapshot
         for listener in tuple(self._analysis_listeners):
             listener(snapshot)
+        self._evaluate_conviction(underlying)
 
     def _publish_option(self, snapshot: OptionChainSnapshot) -> None:
+        self._options_by_underlying[snapshot.underlying] = snapshot
         for listener in tuple(self._option_listeners):
             listener(snapshot)
+        self._evaluate_conviction(snapshot.underlying)
+
+    def _evaluate_conviction(self, underlying: str) -> None:
+        analysis = self._analysis_by_underlying.get(underlying)
+        options = self._options_by_underlying.get(underlying)
+        if analysis is None or options is None:
+            return
+        snapshot = self.conviction.evaluate(analysis, options)
+        for listener in tuple(self._conviction_listeners):
+            listener(snapshot)
+        if self.alerts.should_alert(snapshot):
+            self.alerts.play(snapshot.grade)
+            self.publish_status(f"{snapshot.underlying} {snapshot.grade} paper-trade setup alert")
 
 
 def run_desktop() -> None:

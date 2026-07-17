@@ -30,11 +30,17 @@
 - Open interest, put-call ratio, IV and premium-velocity inputs
 - Bullish/bearish reason contracts for the future conviction engine
 
-## Next — Milestone 5: Conviction and trade-plan engine
+## Completed — Milestone 5: Conviction and trade-plan engine
 
 - Configurable, category-based bullish/bearish scores
 - Explicit evidence and conflict reasons
 - Trade-quality grades, risk limits, and paper-trade-only plans
+
+## Next — Milestone 6: Paper trading, journal, and reports
+
+- Paper positions and stop/target lifecycle simulation
+- Trade journal with evidence captured at entry
+- Daily performance and quality-grade reports
 
 ## Later milestones
 
