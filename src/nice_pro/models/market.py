@@ -1,7 +1,7 @@
 """Stable data contracts shared across the application."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import StrEnum
 
 
@@ -28,6 +28,42 @@ class Quote:
     volume: int | None = None
     bid: float | None = None
     ask: float | None = None
+    open_interest: int | None = None
+
+
+class OptionType(StrEnum):
+    CALL = "CE"
+    PUT = "PE"
+
+
+@dataclass(frozen=True, slots=True)
+class OptionContract:
+    instrument_token: int
+    symbol: str
+    underlying: str
+    expiry: date
+    strike: float
+    option_type: OptionType
+
+
+@dataclass(frozen=True, slots=True)
+class OptionMetric:
+    contract: OptionContract
+    last_price: float
+    open_interest: int | None
+    open_interest_change: int | None
+    implied_volatility: float | None
+    premium_velocity: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class OptionChainSnapshot:
+    underlying: str
+    calculated_at: datetime
+    spot: float | None
+    atm_strike: float | None
+    put_call_ratio_oi: float | None
+    metrics: tuple[OptionMetric, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

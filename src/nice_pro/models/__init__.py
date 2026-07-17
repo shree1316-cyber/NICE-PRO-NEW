@@ -1,3 +1,17 @@
-from nice_pro.models.market import Candle, IndicatorSnapshot, MarketRegime, MarketSnapshot, Quote, Side
+from nice_pro.models.market import (
+    Candle,
+    IndicatorSnapshot,
+    MarketRegime,
+    MarketSnapshot,
+    OptionChainSnapshot,
+    OptionContract,
+    OptionMetric,
+    OptionType,
+    Quote,
+    Side,
+)
 
-__all__ = ["Candle", "IndicatorSnapshot", "MarketRegime", "MarketSnapshot", "Quote", "Side"]
+__all__ = [
+    "Candle", "IndicatorSnapshot", "MarketRegime", "MarketSnapshot", "OptionChainSnapshot",
+    "OptionContract", "OptionMetric", "OptionType", "Quote", "Side",
+]

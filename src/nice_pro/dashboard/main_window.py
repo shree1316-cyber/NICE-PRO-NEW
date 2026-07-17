@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import QApplication, QFrame, QGridLayout, QLabel, QMainWindow, QVBoxLayout, QWidget
 
-from nice_pro.models.market import IndicatorSnapshot, MarketSnapshot
+from nice_pro.models.market import IndicatorSnapshot, MarketSnapshot, OptionChainSnapshot
 
 if TYPE_CHECKING:
     from nice_pro.core.application import Application
@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 class DashboardSignals(QObject):
     snapshot = Signal(object)
     analysis = Signal(object)
+    options = Signal(object)
     status = Signal(str)
 
 
@@ -24,9 +25,11 @@ class MainWindow(QMainWindow):
         self._signals = DashboardSignals()
         self._signals.snapshot.connect(self.update_snapshot)
         self._signals.analysis.connect(self.update_analysis)
+        self._signals.options.connect(self.update_options)
         self._signals.status.connect(self.update_status)
         application.add_snapshot_listener(self._signals.snapshot.emit)
         application.add_analysis_listener(self._signals.analysis.emit)
+        application.add_option_listener(self._signals.options.emit)
         application.add_status_listener(self._signals.status.emit)
         self.setWindowTitle("NICE-PRO | Intraday Conviction Engine")
         self.resize(1280, 760)
@@ -51,6 +54,10 @@ class MainWindow(QMainWindow):
         self._sensex_regime = self._card("SENSEX Market Structure", "Waiting for 1-minute history")
         cards.addWidget(self._nifty_regime[0], 1, 0)
         cards.addWidget(self._sensex_regime[0], 1, 1)
+        self._nifty_options = self._card("NIFTY Options", "Waiting for ATM option discovery")
+        self._sensex_options = self._card("SENSEX Options", "Waiting for ATM option discovery")
+        cards.addWidget(self._nifty_options[0], 2, 0)
+        cards.addWidget(self._sensex_options[0], 2, 1)
         layout.addLayout(cards)
         layout.addStretch()
         self.setCentralWidget(root)
@@ -88,6 +95,19 @@ class MainWindow(QMainWindow):
             values.append(f"VWAP {analysis.vwap:,.2f} | EMA 9/21 {analysis.ema_fast:,.2f} / {analysis.ema_slow:,.2f}")
             values.append(f"RSI {analysis.rsi:.0f} | ATR {analysis.atr:,.2f}")
         values.extend(analysis.reasons[:2])
+        label.setText("\n".join(values))
+
+    def update_options(self, chain: OptionChainSnapshot) -> None:
+        label = self._nifty_options[1] if chain.underlying == "NIFTY" else self._sensex_options[1]
+        values = [f"ATM {chain.atm_strike:,.0f}" if chain.atm_strike is not None else "ATM awaiting spot"]
+        if chain.put_call_ratio_oi is not None:
+            values.append(f"PCR (OI) {chain.put_call_ratio_oi:.2f}")
+        else:
+            values.append("PCR (OI) awaiting option ticks")
+        if chain.metrics:
+            ivs = [metric.implied_volatility for metric in chain.metrics if metric.implied_volatility is not None]
+            if ivs:
+                values.append(f"Model IV range {min(ivs):.1f}%–{max(ivs):.1f}%")
         label.setText("\n".join(values))
 
     def closeEvent(self, event) -> None:  # type: ignore[no-untyped-def]

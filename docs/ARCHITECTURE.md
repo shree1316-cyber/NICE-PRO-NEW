@@ -23,6 +23,10 @@ The Kite callback runs in KiteTicker's worker thread. It never manipulates widge
 
 At startup, a worker fetches recent one-minute candles to warm the indicators. A failed warm-up is shown in the dashboard but cannot stop live quote handling.
 
+## Options analytics
+
+After a spot quote arrives, a worker reads Kite's instrument master, selects the nearest valid NIFTY or SENSEX expiry, and subscribes only to two strikes either side of ATM. From the received option quotes the engine exposes OI, session OI change, PCR, premium velocity, and Black–Scholes implied volatility. IV is model-derived from LTP, not supplied directly by the exchange, and should be treated as an estimate.
+
 ## Safety boundary
 
 There is no order-placement code. `NICE_PAPER_TRADING_ONLY` defaults to `true`. Kite's subscription tokens are explicit configuration, must be checked against the latest instrument master before every market session, and do not authorize trading.

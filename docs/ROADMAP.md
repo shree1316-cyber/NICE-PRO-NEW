@@ -24,11 +24,17 @@
 - Trend/range/volatile regime classification
 - Dashboard market-structure panel
 
-## Next — Milestone 4: Options analytics and conviction inputs
+## Completed — Milestone 4: Options analytics and conviction inputs
 
 - ATM strike discovery and option subscriptions
 - Open interest, put-call ratio, IV and premium-velocity inputs
 - Bullish/bearish reason contracts for the future conviction engine
+
+## Next — Milestone 5: Conviction and trade-plan engine
+
+- Configurable, category-based bullish/bearish scores
+- Explicit evidence and conflict reasons
+- Trade-quality grades, risk limits, and paper-trade-only plans
 
 ## Later milestones
 
