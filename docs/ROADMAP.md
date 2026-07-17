@@ -9,13 +9,20 @@
 - Runnable PySide6 dashboard shell
 - Unit tests and base documentation
 
-## Next — Milestone 2: Live market data
+## Completed — Milestone 2: Live market data
 
 - Instrument lookup and explicit NIFTY/SENSEX subscriptions
 - KiteTicker lifecycle and reconnect handling
 - Tick validation and event publication
 - 10-second, 30-second, and 1-minute candle aggregation
 - Live dashboard price cards
+
+## Next — Milestone 3: Indicator and regime engine
+
+- Seed history from Kite historical candles
+- VWAP, EMA, RSI, ATR, volume and opening-range features
+- Trend/range/volatile regime classification
+- Dashboard market-structure panel
 
 ## Later milestones
 

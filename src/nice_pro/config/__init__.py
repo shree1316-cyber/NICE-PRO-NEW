@@ -1,3 +1,3 @@
-from nice_pro.config.settings import Settings
+from nice_pro.config.settings import Settings, Subscription
 
-__all__ = ["Settings"]
+__all__ = ["Settings", "Subscription"]

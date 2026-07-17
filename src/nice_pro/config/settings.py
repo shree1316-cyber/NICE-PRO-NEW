@@ -15,6 +15,7 @@ class Settings:
     log_level: str = "INFO"
     dashboard_refresh_ms: int = 500
     paper_trading_only: bool = True
+    subscriptions: tuple["Subscription", ...] = ()
 
     @classmethod
     def load(cls, env_file: Path | None = None) -> "Settings":
@@ -27,8 +28,31 @@ class Settings:
             dashboard_refresh_ms=int(getenv("NICE_DASHBOARD_REFRESH_MS", "500")),
             paper_trading_only=getenv("NICE_PAPER_TRADING_ONLY", "true").lower()
             in {"1", "true", "yes", "on"},
+            subscriptions=_parse_subscriptions(
+                getenv("NICE_SUBSCRIPTIONS", "NSE:NIFTY 50:256265,BSE:SENSEX:265")
+            ),
         )
 
     @property
     def kite_configured(self) -> bool:
         return bool(self.kite_api_key and self.kite_access_token)
+
+
+@dataclass(frozen=True, slots=True)
+class Subscription:
+    """An explicit KiteTicker instrument subscription.
+
+    Tokens can change after exchange migrations. Confirm them in Kite's instrument
+    master before a live session and override NICE_SUBSCRIPTIONS when required.
+    """
+
+    symbol: str
+    instrument_token: int
+
+
+def _parse_subscriptions(value: str) -> tuple[Subscription, ...]:
+    subscriptions: list[Subscription] = []
+    for item in value.split(","):
+        exchange, symbol, token = (part.strip() for part in item.rsplit(":", 2))
+        subscriptions.append(Subscription(symbol=f"{exchange}:{symbol}", instrument_token=int(token)))
+    return tuple(subscriptions)
