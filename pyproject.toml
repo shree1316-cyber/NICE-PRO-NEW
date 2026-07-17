@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nice-pro"
+version = "0.1.0"
+description = "NIFTY and SENSEX Intraday Conviction Engine"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "NICE-PRO contributors" }]
+dependencies = [
+  "kiteconnect>=5.0.1",
+  "PySide6>=6.7",
+  "pydantic>=2.7",
+  "python-dotenv>=1.0",
+  "loguru>=0.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[project.scripts]
+nice-pro = "nice_pro.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
