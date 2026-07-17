@@ -11,6 +11,14 @@ class Side(StrEnum):
     NEUTRAL = "NEUTRAL"
 
 
+class MarketRegime(StrEnum):
+    INSUFFICIENT_DATA = "INSUFFICIENT DATA"
+    TREND_UP = "TREND UP"
+    TREND_DOWN = "TREND DOWN"
+    RANGE = "RANGE"
+    VOLATILE = "VOLATILE"
+
+
 @dataclass(frozen=True, slots=True)
 class Quote:
     instrument_token: int
@@ -33,6 +41,23 @@ class Candle:
     low: float
     close: float
     volume: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class IndicatorSnapshot:
+    symbol: str
+    regime: MarketRegime
+    calculated_at: datetime
+    close: float | None = None
+    vwap: float | None = None
+    ema_fast: float | None = None
+    ema_slow: float | None = None
+    rsi: float | None = None
+    atr: float | None = None
+    relative_volume: float | None = None
+    opening_range_high: float | None = None
+    opening_range_low: float | None = None
+    reasons: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

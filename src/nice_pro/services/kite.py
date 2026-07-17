@@ -1,13 +1,13 @@
 """Kite Connect boundary for quotes only; it contains no order-placement API."""
 
 from collections.abc import Callable, Sequence
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from kiteconnect import KiteConnect, KiteTicker
 from loguru import logger
 
 from nice_pro.config.settings import Settings, Subscription
-from nice_pro.models.market import Quote
+from nice_pro.models.market import Candle, Quote
 
 TickCallback = Callable[[Quote], None]
 StatusCallback = Callable[[str], None]
@@ -36,6 +36,39 @@ class KiteService:
         import asyncio
 
         return await asyncio.to_thread(self.client().profile)
+
+    def historical_minute_candles(self, subscription: Subscription, lookback_days: int = 2) -> list[Candle]:
+        """Fetch completed one-minute candles for indicator warm-up.
+
+        This is read-only historical data. Call it from a worker thread, not from
+        the PySide desktop thread.
+        """
+        end = datetime.now(timezone.utc)
+        rows = self.client().historical_data(
+            subscription.instrument_token,
+            end - timedelta(days=lookback_days),
+            end,
+            "minute",
+        )
+        candles: list[Candle] = []
+        for row in rows:
+            opened_at = row["date"]
+            if opened_at.tzinfo is None:
+                opened_at = opened_at.replace(tzinfo=timezone.utc)
+            candles.append(
+                Candle(
+                    symbol=subscription.symbol,
+                    timeframe_seconds=60,
+                    opened_at=opened_at,
+                    closed_at=opened_at + timedelta(minutes=1),
+                    open=float(row["open"]),
+                    high=float(row["high"]),
+                    low=float(row["low"]),
+                    close=float(row["close"]),
+                    volume=int(row.get("volume") or 0),
+                )
+            )
+        return candles
 
     def start_stream(
         self,

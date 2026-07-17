@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import QApplication, QFrame, QGridLayout, QLabel, QMainWindow, QVBoxLayout, QWidget
 
-from nice_pro.models.market import MarketSnapshot
+from nice_pro.models.market import IndicatorSnapshot, MarketSnapshot
 
 if TYPE_CHECKING:
     from nice_pro.core.application import Application
@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 class DashboardSignals(QObject):
     snapshot = Signal(object)
+    analysis = Signal(object)
     status = Signal(str)
 
 
@@ -22,8 +23,10 @@ class MainWindow(QMainWindow):
         self._application = application
         self._signals = DashboardSignals()
         self._signals.snapshot.connect(self.update_snapshot)
+        self._signals.analysis.connect(self.update_analysis)
         self._signals.status.connect(self.update_status)
         application.add_snapshot_listener(self._signals.snapshot.emit)
+        application.add_analysis_listener(self._signals.analysis.emit)
         application.add_status_listener(self._signals.status.emit)
         self.setWindowTitle("NICE-PRO | Intraday Conviction Engine")
         self.resize(1280, 760)
@@ -36,7 +39,7 @@ class MainWindow(QMainWindow):
         title.setObjectName("title")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
-        layout.addWidget(QLabel("Milestone 2 | Live quotes | Paper trading only", alignment=Qt.AlignmentFlag.AlignCenter))
+        layout.addWidget(QLabel("Milestone 3 | Market structure | Paper trading only", alignment=Qt.AlignmentFlag.AlignCenter))
         self._status_label = QLabel("Data source: starting", alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self._status_label)
         cards = QGridLayout()
@@ -44,8 +47,10 @@ class MainWindow(QMainWindow):
         self._sensex_price = self._card("SENSEX", "Waiting for a live quote")
         cards.addWidget(self._nifty_price[0], 0, 0)
         cards.addWidget(self._sensex_price[0], 0, 1)
-        cards.addWidget(self._card("Conviction", "Scheduled for Milestone 4")[0], 1, 0)
-        cards.addWidget(self._card("Trade Plan", "Scheduled for Milestone 5")[0], 1, 1)
+        self._nifty_regime = self._card("NIFTY Market Structure", "Waiting for 1-minute history")
+        self._sensex_regime = self._card("SENSEX Market Structure", "Waiting for 1-minute history")
+        cards.addWidget(self._nifty_regime[0], 1, 0)
+        cards.addWidget(self._sensex_regime[0], 1, 1)
         layout.addLayout(cards)
         layout.addStretch()
         self.setCentralWidget(root)
@@ -75,6 +80,15 @@ class MainWindow(QMainWindow):
 
     def update_status(self, message: str) -> None:
         self._status_label.setText(f"Data source: {message}")
+
+    def update_analysis(self, analysis: IndicatorSnapshot) -> None:
+        label = self._nifty_regime[1] if analysis.symbol == "NSE:NIFTY 50" else self._sensex_regime[1]
+        values = [f"{analysis.regime}"]
+        if analysis.vwap is not None:
+            values.append(f"VWAP {analysis.vwap:,.2f} | EMA 9/21 {analysis.ema_fast:,.2f} / {analysis.ema_slow:,.2f}")
+            values.append(f"RSI {analysis.rsi:.0f} | ATR {analysis.atr:,.2f}")
+        values.extend(analysis.reasons[:2])
+        label.setText("\n".join(values))
 
     def closeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         self._application.stop()

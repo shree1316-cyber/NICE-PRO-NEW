@@ -17,12 +17,18 @@
 - 10-second, 30-second, and 1-minute candle aggregation
 - Live dashboard price cards
 
-## Next — Milestone 3: Indicator and regime engine
+## Completed — Milestone 3: Indicator and regime engine
 
 - Seed history from Kite historical candles
 - VWAP, EMA, RSI, ATR, volume and opening-range features
 - Trend/range/volatile regime classification
 - Dashboard market-structure panel
+
+## Next — Milestone 4: Options analytics and conviction inputs
+
+- ATM strike discovery and option subscriptions
+- Open interest, put-call ratio, IV and premium-velocity inputs
+- Bullish/bearish reason contracts for the future conviction engine
 
 ## Later milestones
 
