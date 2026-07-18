@@ -1,4 +1,4 @@
-"""High-density desktop dashboard designed for a rapid intraday scan."""
+"""Fast-scan desktop dashboard with functional workspace tabs."""
 
 from typing import TYPE_CHECKING
 
@@ -11,8 +11,9 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QProgressBar,
-    QScrollArea,
+    QPushButton,
     QSizePolicy,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -32,7 +33,7 @@ class DashboardSignals(QObject):
 
 
 class MainWindow(QMainWindow):
-    """A visual layer only: live values arrive through thread-safe Qt signals."""
+    """One-screen dashboard plus focused NIFTY, SENSEX, options and plan tabs."""
 
     def __init__(self, application: "Application") -> None:
         super().__init__()
@@ -49,8 +50,9 @@ class MainWindow(QMainWindow):
         application.add_conviction_listener(self._signals.conviction.emit)
         application.add_status_listener(self._signals.status.emit)
         self.setWindowTitle("NICE-PRO | Intraday Conviction Engine")
-        self.resize(1600, 980)
-        self.setMinimumSize(1180, 760)
+        self.resize(1600, 920)
+        self.setMinimumSize(1100, 650)
+        self._nav_buttons: list[QPushButton] = []
         self._build()
         self._clock = QTimer(self)
         self._clock.timeout.connect(self._refresh_clock)
@@ -59,32 +61,30 @@ class MainWindow(QMainWindow):
 
     def _build(self) -> None:
         root = QWidget()
-        root_layout = QVBoxLayout(root)
-        root_layout.setContentsMargins(14, 12, 14, 14)
-        root_layout.setSpacing(10)
-        root_layout.addWidget(self._header())
-        root_layout.addWidget(self._navigation())
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        content = QWidget()
-        body = QHBoxLayout(content)
-        body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(10)
-        body.addWidget(self._sidebar(), 0)
-        body.addWidget(self._main_area(), 1)
-        scroll.setWidget(content)
-        root_layout.addWidget(scroll, 1)
-        root_layout.addWidget(self._footer())
+        layout = QVBoxLayout(root)
+        layout.setContentsMargins(8, 7, 8, 7)
+        layout.setSpacing(8)
+        layout.addWidget(self._header())
+        layout.addWidget(self._navigation())
+        self._pages = QStackedWidget()
+        self._pages.addWidget(self._dashboard_page())
+        self._pages.addWidget(self._focus_page("NIFTY ANALYSIS", "NIFTY", "NIFTY focus data will appear here."))
+        self._pages.addWidget(self._focus_page("SENSEX ANALYSIS", "SENSEX", "SENSEX focus data will appear here."))
+        self._pages.addWidget(self._focus_page("OPTION CHAIN", "OPTIONS", "ATM option-chain data will appear here."))
+        self._pages.addWidget(self._focus_page("PAPER TRADE", "PAPER", "Paper-only trade plans will appear here."))
+        self._pages.addWidget(self._placeholder_page("JOURNAL", "Journal is scheduled for Milestone 6."))
+        self._pages.addWidget(self._placeholder_page("REPORTS", "Performance reports are scheduled for Milestone 6."))
+        layout.addWidget(self._pages, 1)
+        layout.addWidget(self._footer())
         self.setCentralWidget(root)
         self.setStyleSheet(_STYLESHEET)
+        self._switch_page(0)
 
     def _header(self) -> QFrame:
         header = QFrame()
         header.setObjectName("header")
         layout = QHBoxLayout(header)
-        layout.setContentsMargins(18, 11, 18, 11)
+        layout.setContentsMargins(16, 9, 16, 9)
         brand = QVBoxLayout()
         title = QLabel("NICE-PRO")
         title.setObjectName("brand")
@@ -98,7 +98,7 @@ class MainWindow(QMainWindow):
         self._mode_badge.setObjectName("modeBadge")
         layout.addWidget(self._mode_badge)
         right = QVBoxLayout()
-        self._connection_badge = QLabel("CONNECTING")
+        self._connection_badge = QLabel("DATA STATUS")
         self._connection_badge.setObjectName("connectionBadge")
         self._clock_label = QLabel("")
         self._clock_label.setObjectName("clock")
@@ -107,121 +107,141 @@ class MainWindow(QMainWindow):
         layout.addLayout(right)
         return header
 
-    @staticmethod
-    def _navigation() -> QFrame:
+    def _navigation(self) -> QFrame:
         nav = QFrame()
         nav.setObjectName("navigation")
         layout = QHBoxLayout(nav)
-        layout.setContentsMargins(12, 7, 12, 7)
-        for index, label in enumerate(("DASHBOARD", "NIFTY", "SENSEX", "OPTIONS", "PAPER TRADE", "JOURNAL", "REPORTS")):
-            item = QLabel(label)
-            item.setObjectName("navActive" if index == 0 else "navItem")
-            layout.addWidget(item)
+        layout.setContentsMargins(10, 5, 10, 5)
+        labels = ("DASHBOARD", "NIFTY", "SENSEX", "OPTIONS", "PAPER TRADE", "JOURNAL", "REPORTS")
+        for index, label in enumerate(labels):
+            button = QPushButton(label)
+            button.setObjectName("navButton")
+            button.clicked.connect(lambda checked=False, page=index: self._switch_page(page))
+            layout.addWidget(button)
+            self._nav_buttons.append(button)
         layout.addStretch()
         return nav
+
+    def _dashboard_page(self) -> QWidget:
+        page = QWidget()
+        body = QHBoxLayout(page)
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(8)
+        body.addWidget(self._sidebar(), 0)
+
+        main = QWidget()
+        grid = QGridLayout(main)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(8)
+        self._nifty_quote = self._quote_card("NIFTY 50", "NIFTY")
+        self._sensex_quote = self._quote_card("SENSEX", "SENSEX")
+        grid.addWidget(self._nifty_quote["panel"], 0, 0)
+        grid.addWidget(self._sensex_quote["panel"], 0, 1)
+        self._nifty_conviction = self._conviction_card("NIFTY INTRADAY CONVICTION")
+        self._sensex_conviction = self._conviction_card("SENSEX INTRADAY CONVICTION")
+        grid.addWidget(self._nifty_conviction["panel"], 1, 0)
+        grid.addWidget(self._sensex_conviction["panel"], 1, 1)
+        self._nifty_evidence = self._evidence_card("NIFTY EVIDENCE")
+        self._sensex_evidence = self._evidence_card("SENSEX EVIDENCE")
+        grid.addWidget(self._nifty_evidence["panel"], 2, 0)
+        grid.addWidget(self._sensex_evidence["panel"], 2, 1)
+        self._nifty_plan = self._plan_card("NIFTY PAPER PLAN")
+        self._sensex_plan = self._plan_card("SENSEX PAPER PLAN")
+        grid.addWidget(self._nifty_plan["panel"], 3, 0)
+        grid.addWidget(self._sensex_plan["panel"], 3, 1)
+        for row, stretch in enumerate((8, 10, 11, 12)):
+            grid.setRowStretch(row, stretch)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        body.addWidget(main, 1)
+        return page
 
     def _sidebar(self) -> QFrame:
         side = QFrame()
         side.setObjectName("sidebar")
-        side.setMinimumWidth(240)
-        side.setMaximumWidth(280)
+        side.setMinimumWidth(205)
+        side.setMaximumWidth(240)
         layout = QVBoxLayout(side)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
         overview, overview_layout = self._panel("MARKET OVERVIEW", "blue")
         self._overview_nifty = self._market_row(overview_layout, "NIFTY", "--")
         self._overview_sensex = self._market_row(overview_layout, "SENSEX", "--")
-        self._overview_status = self._market_row(overview_layout, "STATUS", "Awaiting feed")
+        self._overview_status = self._market_row(overview_layout, "STATUS", "Starting")
         layout.addWidget(overview)
-
         session, session_layout = self._panel("TIME AND SESSION", "purple")
         self._session_clock = QLabel("--:--:--")
         self._session_clock.setObjectName("sessionClock")
-        self._session_note = QLabel("Market data drives the analysis.\nNo live orders are sent.")
-        self._session_note.setObjectName("muted")
         session_layout.addWidget(self._session_clock)
-        session_layout.addWidget(self._session_note)
+        session_layout.addWidget(self._muted("Paper-only. No live orders are sent."))
         layout.addWidget(session)
-
         alerts, alerts_layout = self._panel("ALERTS", "amber")
-        self._alert_feed = QLabel("No A/A+ paper setup yet.\nAlerts have a cooldown to reduce noise.")
-        self._alert_feed.setWordWrap(True)
-        self._alert_feed.setObjectName("muted")
+        self._alert_feed = self._muted("No A/A+ paper setup yet.\nAlert cooldown is active.")
         alerts_layout.addWidget(self._alert_feed)
         layout.addWidget(alerts)
         layout.addStretch()
         return side
 
-    def _main_area(self) -> QWidget:
-        area = QWidget()
-        grid = QGridLayout(area)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(10)
-        grid.setVerticalSpacing(10)
-        self._nifty_quote = self._quote_card("NIFTY 50", "NIFTY")
-        self._sensex_quote = self._quote_card("SENSEX", "SENSEX")
-        grid.addWidget(self._nifty_quote["panel"], 0, 0)
-        grid.addWidget(self._sensex_quote["panel"], 0, 1)
+    def _focus_page(self, title: str, key: str, initial_text: str) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        panel, panel_layout = self._panel(title, "blue")
+        panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        detail = QLabel(initial_text)
+        detail.setObjectName("focusDetail")
+        detail.setWordWrap(True)
+        panel_layout.addWidget(detail)
+        panel_layout.addStretch()
+        layout.addWidget(panel)
+        if key == "NIFTY":
+            self._nifty_focus = detail
+        elif key == "SENSEX":
+            self._sensex_focus = detail
+        elif key == "OPTIONS":
+            self._options_focus = detail
+        else:
+            self._paper_focus = detail
+        return page
 
-        self._nifty_conviction = self._conviction_card("NIFTY INTRADAY CONVICTION")
-        self._sensex_conviction = self._conviction_card("SENSEX INTRADAY CONVICTION")
-        grid.addWidget(self._nifty_conviction["panel"], 1, 0)
-        grid.addWidget(self._sensex_conviction["panel"], 1, 1)
-
-        self._nifty_evidence = self._evidence_card("NIFTY EVIDENCE")
-        self._sensex_evidence = self._evidence_card("SENSEX EVIDENCE")
-        grid.addWidget(self._nifty_evidence["panel"], 2, 0)
-        grid.addWidget(self._sensex_evidence["panel"], 2, 1)
-
-        self._nifty_plan = self._plan_card("NIFTY PAPER TRADE PLAN")
-        self._sensex_plan = self._plan_card("SENSEX PAPER TRADE PLAN")
-        grid.addWidget(self._nifty_plan["panel"], 3, 0)
-        grid.addWidget(self._sensex_plan["panel"], 3, 1)
-
-        scalp, scalp_layout = self._panel("SCALP BOX | 10s / 30s", "cyan")
-        scalp.setObjectName("widePanel")
-        self._scalp_label = QLabel("Scalp engine is reserved for a later milestone.\nUse the conviction panels for the current paper-only setup.")
-        self._scalp_label.setObjectName("muted")
-        scalp_layout.addWidget(self._scalp_label)
-        grid.addWidget(scalp, 4, 0)
-
-        options, options_layout = self._panel("OPTION CHAIN SNAPSHOT", "blue")
-        self._option_snapshot = QLabel("Waiting for ATM option discovery and live option ticks.")
-        self._option_snapshot.setObjectName("muted")
-        self._option_snapshot.setWordWrap(True)
-        options_layout.addWidget(self._option_snapshot)
-        grid.addWidget(options, 4, 1)
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
-        return area
+    def _placeholder_page(self, title: str, text: str) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        panel, panel_layout = self._panel(title, "purple")
+        panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        heading = QLabel("COMING NEXT")
+        heading.setObjectName("placeholderHeading")
+        panel_layout.addWidget(heading)
+        panel_layout.addWidget(self._muted(text))
+        panel_layout.addStretch()
+        layout.addWidget(panel)
+        return page
 
     def _quote_card(self, title: str, key: str) -> dict[str, object]:
         panel, layout = self._panel(title, "blue")
-        panel.setObjectName("quotePanel")
         value = QLabel("--")
         value.setObjectName("quoteValue")
-        change = QLabel("Waiting for a live quote")
-        change.setObjectName("muted")
-        micro = QLabel("Bid / Ask: -- / --")
+        state = QLabel("WAITING FOR LIVE QUOTE")
+        state.setObjectName("quoteState")
+        micro = QLabel("Bid / Ask  -- / --")
         micro.setObjectName("micro")
         layout.addWidget(value)
-        layout.addWidget(change)
+        layout.addWidget(state)
         layout.addWidget(micro)
-        return {"panel": panel, "value": value, "change": change, "micro": micro, "key": key}
+        return {"panel": panel, "value": value, "state": state, "micro": micro, "key": key}
 
     def _conviction_card(self, title: str) -> dict[str, object]:
         panel, layout = self._panel(title, "green")
         headline = QLabel("WAIT")
         headline.setObjectName("convictionHeadline")
-        score = QLabel("Confidence --")
+        score = QLabel("Confidence -- | Bull -- / Bear --")
         score.setObjectName("scoreText")
         bar = QProgressBar()
         bar.setRange(0, 100)
-        bar.setValue(0)
         bar.setTextVisible(False)
-        detail = QLabel("Waiting for aligned market and option evidence")
-        detail.setObjectName("muted")
-        detail.setWordWrap(True)
+        detail = self._muted("Waiting for aligned market and option evidence")
         layout.addWidget(headline)
         layout.addWidget(score)
         layout.addWidget(bar)
@@ -230,9 +250,9 @@ class MainWindow(QMainWindow):
 
     def _evidence_card(self, title: str) -> dict[str, object]:
         panel, layout = self._panel(title, "amber")
-        positive = QLabel("Bullish evidence will appear here")
+        positive = QLabel("+ Bullish evidence will appear here")
         positive.setObjectName("positiveEvidence")
-        negative = QLabel("Bearish evidence will appear here")
+        negative = QLabel("- Bearish evidence will appear here")
         negative.setObjectName("negativeEvidence")
         caution = QLabel("")
         caution.setObjectName("cautionEvidence")
@@ -245,9 +265,7 @@ class MainWindow(QMainWindow):
         panel, layout = self._panel(title, "purple")
         status = QLabel("NO PAPER SETUP")
         status.setObjectName("planStatus")
-        detail = QLabel("A plan appears only for A/A+ evidence with a defined risk cap.")
-        detail.setObjectName("muted")
-        detail.setWordWrap(True)
+        detail = self._muted("A plan requires A/A+ evidence, an ATM quote, and risk inside the configured cap.")
         layout.addWidget(status)
         layout.addWidget(detail)
         return {"panel": panel, "status": status, "detail": detail}
@@ -257,14 +275,20 @@ class MainWindow(QMainWindow):
         panel = QFrame()
         panel.setObjectName("panel")
         panel.setProperty("accent", accent)
-        panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(13, 11, 13, 12)
-        layout.setSpacing(6)
+        layout.setContentsMargins(11, 9, 11, 9)
+        layout.setSpacing(4)
         heading = QLabel(title)
         heading.setObjectName("panelTitle")
         layout.addWidget(heading)
         return panel, layout
+
+    @staticmethod
+    def _muted(text: str) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName("muted")
+        label.setWordWrap(True)
+        return label
 
     @staticmethod
     def _market_row(layout: QVBoxLayout, name: str, value: str) -> QLabel:
@@ -278,11 +302,18 @@ class MainWindow(QMainWindow):
         footer = QFrame()
         footer.setObjectName("footer")
         layout = QHBoxLayout(footer)
-        layout.setContentsMargins(12, 7, 12, 7)
-        layout.addWidget(QLabel("Data: Zerodha Kite | Mode: PAPER ONLY | Plans are decision support, not orders"))
+        layout.setContentsMargins(10, 5, 10, 5)
+        layout.addWidget(QLabel("Data: Zerodha Kite | Mode: PAPER ONLY | Decision support only - no orders"))
         layout.addStretch()
         layout.addWidget(QLabel("NICE-PRO"))
         return footer
+
+    def _switch_page(self, index: int) -> None:
+        self._pages.setCurrentIndex(index)
+        for position, button in enumerate(self._nav_buttons):
+            button.setProperty("active", position == index)
+            button.style().unpolish(button)
+            button.style().polish(button)
 
     def update_snapshot(self, snapshot: MarketSnapshot) -> None:
         self._update_quote(self._nifty_quote, snapshot.quote_for("NSE:NIFTY 50"))
@@ -292,14 +323,17 @@ class MainWindow(QMainWindow):
         if quote is None:
             return
         card["value"].setText(f"{quote.last_price:,.2f}")  # type: ignore[union-attr]
-        card["change"].setText("LIVE MARKET QUOTE")  # type: ignore[union-attr]
-        card["micro"].setText(f"Bid / Ask: {quote.bid or 0:,.2f} / {quote.ask or 0:,.2f}")  # type: ignore[union-attr]
-        overview = self._overview_nifty if card["key"] == "NIFTY" else self._overview_sensex
-        overview.setText(f"<span style='color:#94a3b8'>{card['key']}</span><span style='float:right; color:#4ade80'>{quote.last_price:,.2f}</span>")
+        card["state"].setText("LIVE MARKET QUOTE")  # type: ignore[union-attr]
+        card["micro"].setText(f"Bid / Ask  {quote.bid or 0:,.2f} / {quote.ask or 0:,.2f}")  # type: ignore[union-attr]
+        name = card["key"]
+        overview = self._overview_nifty if name == "NIFTY" else self._overview_sensex
+        overview.setText(f"<span style='color:#94a3b8'>{name}</span><span style='float:right; color:#4ade80'>{quote.last_price:,.2f}</span>")
+        focus = self._nifty_focus if name == "NIFTY" else self._sensex_focus
+        focus.setText(f"<b>{name} LIVE</b><br><br>LTP: <b>{quote.last_price:,.2f}</b><br>Bid / Ask: {quote.bid or 0:,.2f} / {quote.ask or 0:,.2f}")
 
     def update_status(self, message: str) -> None:
-        upper = message.upper()
-        connected = "CONNECTED" in upper or "ACTIVE" in upper
+        text = message.upper()
+        connected = "CONNECTED" in text or "ACTIVE" in text
         self._connection_badge.setText("KITE CONNECTED" if connected else "DATA STATUS")
         self._connection_badge.setProperty("connected", connected)
         self._connection_badge.style().unpolish(self._connection_badge)
@@ -308,47 +342,55 @@ class MainWindow(QMainWindow):
 
     def update_analysis(self, analysis: IndicatorSnapshot) -> None:
         card = self._nifty_conviction if analysis.symbol == "NSE:NIFTY 50" else self._sensex_conviction
-        card["detail"].setText(
-            f"{analysis.regime} | VWAP {analysis.vwap:,.2f}" if analysis.vwap is not None else str(analysis.regime)
-        )  # type: ignore[union-attr]
+        text = f"{analysis.regime} | VWAP {analysis.vwap:,.2f}" if analysis.vwap is not None else str(analysis.regime)
+        card["detail"].setText(text)  # type: ignore[union-attr]
+        focus = self._nifty_focus if analysis.symbol == "NSE:NIFTY 50" else self._sensex_focus
+        if analysis.vwap is not None:
+            focus.setText(
+                f"<b>{analysis.symbol}</b><br><br>Regime: <b>{analysis.regime}</b><br>VWAP: {analysis.vwap:,.2f}<br>"
+                f"EMA 9 / 21: {analysis.ema_fast:,.2f} / {analysis.ema_slow:,.2f}<br>RSI: {analysis.rsi:.0f} | ATR: {analysis.atr:,.2f}"
+            )
 
     def update_options(self, chain: OptionChainSnapshot) -> None:
-        metrics = [
-            f"{chain.underlying} ATM: {chain.atm_strike:,.0f}" if chain.atm_strike is not None else f"{chain.underlying}: awaiting ATM",
+        data = [
+            f"<b>{chain.underlying} ATM</b>: {chain.atm_strike:,.0f}" if chain.atm_strike is not None else f"<b>{chain.underlying}</b>: awaiting ATM",
             f"PCR (OI): {chain.put_call_ratio_oi:.2f}" if chain.put_call_ratio_oi is not None else "PCR (OI): warming up",
         ]
         ivs = [metric.implied_volatility for metric in chain.metrics if metric.implied_volatility is not None]
         if ivs:
-            metrics.append(f"Model IV: {min(ivs):.1f}% to {max(ivs):.1f}%")
-        self._option_snapshot.setText(" | ".join(metrics))
+            data.append(f"Model IV: {min(ivs):.1f}% to {max(ivs):.1f}%")
+        self._options_focus.setText("<br><br>".join(data))
 
     def update_conviction(self, snapshot: ConvictionSnapshot) -> None:
         conviction = self._nifty_conviction if snapshot.underlying == "NIFTY" else self._sensex_conviction
         evidence = self._nifty_evidence if snapshot.underlying == "NIFTY" else self._sensex_evidence
         plan_card = self._nifty_plan if snapshot.underlying == "NIFTY" else self._sensex_plan
-        conviction["headline"].setText(f"{snapshot.grade}  |  {snapshot.side}")  # type: ignore[union-attr]
+        conviction["headline"].setText(f"{snapshot.grade} | {snapshot.side}")  # type: ignore[union-attr]
         conviction["score"].setText(f"Confidence {snapshot.confidence}%   Bull {snapshot.bullish_score} / Bear {snapshot.bearish_score}")  # type: ignore[union-attr]
         conviction["bar"].setValue(snapshot.confidence)  # type: ignore[union-attr]
-        conviction["detail"].setText("Paper-only decision support. Wait for confirmation before acting.")  # type: ignore[union-attr]
         evidence["positive"].setText("+ " + ("\n+ ".join(snapshot.bullish_reasons[:3]) or "No bullish evidence"))  # type: ignore[union-attr]
         evidence["negative"].setText("- " + ("\n- ".join(snapshot.bearish_reasons[:3]) or "No bearish evidence"))  # type: ignore[union-attr]
         evidence["caution"].setText(("CAUTION: " + snapshot.conflicts[0]) if snapshot.conflicts else "")  # type: ignore[union-attr]
         if snapshot.plan is None:
             plan_card["status"].setText("NO PAPER SETUP")  # type: ignore[union-attr]
-            plan_card["detail"].setText("Need A/A+ grade, an ATM quote, and risk within the configured cap.")  # type: ignore[union-attr]
+            plan_card["detail"].setText("Need A/A+ grade, ATM quote, and risk inside the configured cap.")  # type: ignore[union-attr]
         else:
             plan = snapshot.plan
             plan_card["status"].setText(f"PAPER ONLY | {plan.option_symbol}")  # type: ignore[union-attr]
             plan_card["detail"].setText(
                 f"Entry {plan.entry:.2f} | SL {plan.stop_loss:.2f} | T1 {plan.target_1:.2f} | T2 {plan.target_2:.2f}\n"
-                f"Max loss/lot Rs. {plan.max_loss_per_lot:,.0f} | Lot size {plan.lot_size}"
+                f"Max loss/lot Rs. {plan.max_loss_per_lot:,.0f} | Lot {plan.lot_size}"
             )  # type: ignore[union-attr]
             self._alert_feed.setText(f"{snapshot.underlying} {snapshot.grade} paper setup\n{plan.option_symbol} | Risk-capped plan available")
+            self._paper_focus.setText(
+                f"<b>{snapshot.underlying} PAPER PLAN</b><br><br>{plan.option_symbol}<br>Entry: {plan.entry:.2f}<br>"
+                f"Stop Loss: {plan.stop_loss:.2f}<br>Target 1: {plan.target_1:.2f}<br>Target 2: {plan.target_2:.2f}<br>"
+                f"Maximum loss/lot: Rs. {plan.max_loss_per_lot:,.0f}<br><br><i>No order is submitted.</i>"
+            )
 
     def _refresh_clock(self) -> None:
         now = QDateTime.currentDateTime()
-        stamp = now.toString("hh:mm:ss AP | ddd, dd MMM")
-        self._clock_label.setText(stamp)
+        self._clock_label.setText(now.toString("hh:mm:ss AP | ddd, dd MMM"))
         self._session_clock.setText(now.toString("hh:mm:ss AP"))
 
     def closeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
@@ -365,38 +407,39 @@ def run_dashboard(application: "Application") -> int:
 
 
 _STYLESHEET = """
-QMainWindow { background: #07111f; color: #dce8f8; font-family: 'Segoe UI'; }
-QScrollArea { background: transparent; }
-QFrame#header { background: #0a1930; border: 1px solid #1f426d; border-radius: 12px; }
-QLabel#brand { color: #bca7ff; font-size: 27px; font-weight: 800; letter-spacing: 1px; }
-QLabel#subtitle { color: #71839d; font-size: 10px; font-weight: 700; }
-QLabel#modeBadge { background: #153b2c; color: #4ade80; border: 1px solid #256b49; border-radius: 7px; padding: 8px 12px; font-weight: 800; }
-QLabel#connectionBadge { color: #fbbf24; font-size: 11px; font-weight: 800; }
+QMainWindow { background: #000000; color: #e5edf8; font-family: 'Segoe UI'; }
+QFrame#header { background: #050d17; border: 1px solid #164a7a; border-radius: 11px; }
+QLabel#brand { color: #b59cff; font-size: 26px; font-weight: 900; letter-spacing: 1px; }
+QLabel#subtitle { color: #7194bd; font-size: 10px; font-weight: 700; }
+QLabel#modeBadge { background: #103d2a; color: #4ade80; border: 1px solid #28714d; border-radius: 6px; padding: 8px 12px; font-weight: 900; }
+QLabel#connectionBadge { color: #facc15; font-size: 11px; font-weight: 900; }
 QLabel#connectionBadge[connected="true"] { color: #4ade80; }
-QLabel#clock { color: #cbd5e1; font-size: 12px; }
-QFrame#navigation, QFrame#footer { background: #0b1a2d; border: 1px solid #1c3555; border-radius: 8px; }
-QLabel#navActive { color: #38bdf8; font-weight: 800; border-bottom: 2px solid #38bdf8; padding: 4px 9px; }
-QLabel#navItem { color: #8fa3bd; font-size: 11px; font-weight: 700; padding: 4px 9px; }
-QFrame#sidebar { background: #09182a; border: 1px solid #1c3555; border-radius: 10px; }
-QFrame#panel { background: #0b1d31; border: 1px solid #1a385b; border-radius: 9px; }
-QFrame#panel[accent="green"] { border-top: 2px solid #39895c; }
-QFrame#panel[accent="blue"] { border-top: 2px solid #287cb5; }
-QFrame#panel[accent="purple"] { border-top: 2px solid #7c55b6; }
-QFrame#panel[accent="amber"] { border-top: 2px solid #a6782d; }
-QFrame#panel[accent="cyan"] { border-top: 2px solid #22a7b8; }
-QFrame#quotePanel { background: #0a2038; }
-QLabel#panelTitle { color: #dce8f8; font-size: 12px; font-weight: 800; }
-QLabel#quoteValue { color: #f8fafc; font-size: 26px; font-weight: 800; }
-QLabel#convictionHeadline { color: #4ade80; font-size: 24px; font-weight: 900; }
-QLabel#scoreText { color: #d6e3f1; font-weight: 700; }
-QProgressBar { height: 8px; border: 0; border-radius: 4px; background: #172b43; }
-QProgressBar::chunk { border-radius: 4px; background: qlineargradient(x1:0, x2:1, stop:0 #f59e0b, stop:0.52 #cbdc3e, stop:1 #22c55e); }
-QLabel#positiveEvidence { color: #71e49a; font-size: 12px; }
-QLabel#negativeEvidence { color: #fb7185; font-size: 12px; }
-QLabel#cautionEvidence { color: #facc15; font-size: 11px; }
-QLabel#planStatus { color: #d8b4fe; font-size: 14px; font-weight: 900; }
-QLabel#sessionClock { color: #e5e7eb; font-size: 24px; font-weight: 800; }
-QLabel#muted, QLabel#micro { color: #93a9c2; font-size: 11px; }
-QLabel#marketRow { border-bottom: 1px solid #16304d; padding: 6px 0; font-size: 12px; }
-QFrame#footer { color: #71839d; font-size: 11px; }
+QLabel#clock { color: #cbd5e1; font-size: 11px; }
+QFrame#navigation, QFrame#footer { background: #050d17; border: 1px solid #173657; border-radius: 8px; }
+QPushButton#navButton { background: transparent; color: #8ea4be; border: none; border-radius: 5px; padding: 7px 11px; font-size: 11px; font-weight: 800; }
+QPushButton#navButton:hover { color: #d7efff; background: #0b2944; }
+QPushButton#navButton[active="true"] { color: #38bdf8; background: #082940; border-bottom: 2px solid #38bdf8; }
+QFrame#sidebar { background: #030a12; border: 1px solid #16395d; border-radius: 9px; }
+QFrame#panel { background: #071627; border: 1px solid #164269; border-radius: 8px; }
+QFrame#panel[accent="green"] { border-top: 2px solid #3fa76b; }
+QFrame#panel[accent="blue"] { border-top: 2px solid #2589cf; }
+QFrame#panel[accent="purple"] { border-top: 2px solid #9b63e5; }
+QFrame#panel[accent="amber"] { border-top: 2px solid #d79c2f; }
+QLabel#panelTitle { color: #f2f6fb; font-size: 12px; font-weight: 900; }
+QLabel#quoteValue { color: #f8fafc; font-size: 25px; font-weight: 900; }
+QLabel#quoteState { color: #52d8ff; font-size: 10px; font-weight: 800; }
+QLabel#convictionHeadline { color: #4ade80; font-size: 22px; font-weight: 900; }
+QLabel#scoreText { color: #dce8f6; font-size: 11px; font-weight: 800; }
+QProgressBar { height: 7px; border: 0; border-radius: 3px; background: #142942; }
+QProgressBar::chunk { border-radius: 3px; background: qlineargradient(x1:0, x2:1, stop:0 #f59e0b, stop:0.55 #b9d43e, stop:1 #22c55e); }
+QLabel#positiveEvidence { color: #62e99a; font-size: 11px; }
+QLabel#negativeEvidence { color: #fb7185; font-size: 11px; }
+QLabel#cautionEvidence { color: #facc15; font-size: 10px; }
+QLabel#planStatus { color: #d8b4fe; font-size: 13px; font-weight: 900; }
+QLabel#sessionClock { color: #f8fafc; font-size: 22px; font-weight: 900; }
+QLabel#muted, QLabel#micro { color: #94a9c2; font-size: 10px; }
+QLabel#marketRow { border-bottom: 1px solid #123250; padding: 5px 0; font-size: 11px; }
+QLabel#focusDetail { color: #dbeafe; font-size: 15px; }
+QLabel#placeholderHeading { color: #b59cff; font-size: 24px; font-weight: 900; }
+QFrame#footer { color: #71839d; font-size: 10px; }
 """
