@@ -57,6 +57,7 @@ class OptionChainEngine:
             observed_max_pain=observed_max_pain,
             iv_skew=iv_skew,
             expected_move=expected_move,
+            observed_strikes=tuple(strikes),
         )
 
     def _metric(self, contract: OptionContract, spot: float | None) -> OptionMetric | None:

@@ -79,6 +79,7 @@ class OptionChainSnapshot:
     observed_max_pain: float | None = None
     iv_skew: float | None = None
     expected_move: float | None = None
+    observed_strikes: tuple[float, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,6 +139,18 @@ class IndicatorSnapshot:
     opening_range_high: float | None = None
     opening_range_low: float | None = None
     reasons: tuple[str, ...] = ()
+    readings: tuple["IndicatorReading", ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class IndicatorReading:
+    """One transparent row in the live indicator matrix."""
+
+    name: str
+    category: str
+    value: str
+    state: str
+    reason: str
 
 
 @dataclass(frozen=True, slots=True)

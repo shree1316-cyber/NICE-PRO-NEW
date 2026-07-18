@@ -2,7 +2,7 @@
 
 NIFTY & SENSEX Intraday Conviction Engine — a transparent, paper-trading-first desktop decision-support application.
 
-> **Status:** Milestone 6. Live quote streaming, focused NIFTY/SENSEX analysis workspaces, expanded observed ATM option-chain data, explainable conviction, and paper-only candidate plans are implemented. Paper-trade journaling, reports, and backtesting follow in later milestones.
+> **Status:** Milestone 7. The focused NIFTY/SENSEX workspaces include a 100-row indicator matrix grouped by category. Values are calculated where the present feed supports them; missing inputs are explicitly shown as `FEED REQUIRED` rather than invented.
 
 ## Principles
 

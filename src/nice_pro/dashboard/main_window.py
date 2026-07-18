@@ -91,7 +91,7 @@ class MainWindow(QMainWindow):
         self._convictions: dict[str, ConvictionSnapshot] = {}
         self._kite_connected = False
         self._nav_buttons: list[QPushButton] = []
-        self._analysis_views: dict[str, dict[str, QLabel]] = {}
+        self._analysis_views: dict[str, dict[str, object]] = {}
         self._option_tables: dict[str, QTableWidget] = {}
         self._option_summaries: dict[str, QLabel] = {}
         self._signals.snapshot.connect(self.update_snapshot)
@@ -235,26 +235,32 @@ class MainWindow(QMainWindow):
             top.setColumnStretch(col, 1)
         layout.addLayout(top)
         middle = QHBoxLayout()
-        indicators_panel, indicators_layout = self._panel("LIVE INDICATOR VALUES", "blue")
-        indicators = QLabel("Waiting for one-minute history")
-        indicators.setObjectName("workspaceMetrics")
-        indicators.setWordWrap(True)
-        indicators_layout.addWidget(indicators)
-        middle.addWidget(indicators_panel, 1)
+        indicators_panel, indicators_layout = self._panel("100-INDICATOR MATRIX", "blue")
+        indicator_summary = self._muted("Live price/candle indicators plus explicit feed requirements for volume, options and order-flow indicators.")
+        indicators_layout.addWidget(indicator_summary)
+        indicator_tabs = QTabWidget()
+        indicator_tabs.setObjectName("chainTabs")
+        indicator_tables: dict[str, QTableWidget] = {}
+        for category in ("Trend", "Momentum", "Volatility", "Levels", "Volume", "Options & Flow"):
+            table = self._indicator_table()
+            indicator_tabs.addTab(table, category)
+            indicator_tables[category] = table
+        indicators_layout.addWidget(indicator_tabs, 1)
+        middle.addWidget(indicators_panel, 3)
         reasons_panel, reasons_layout = self._panel("EVIDENCE & CONFLICTS", "amber")
         reasons = QLabel("Waiting for conviction evaluation")
         reasons.setObjectName("workspaceReasons")
         reasons.setWordWrap(True)
         reasons_layout.addWidget(reasons)
-        middle.addWidget(reasons_panel, 1)
+        middle.addWidget(reasons_panel, 2)
         plan_panel, plan_layout = self._panel("PAPER TRADE PLAN", "purple")
         plan = QLabel("No paper setup")
         plan.setObjectName("workspacePlan")
         plan.setWordWrap(True)
         plan_layout.addWidget(plan)
-        middle.addWidget(plan_panel, 1)
+        middle.addWidget(plan_panel, 2)
         layout.addLayout(middle, 1)
-        self._analysis_views[underlying] = {"live": live, "quote_meta": quote_meta, "score": score, "score_meta": score_meta, "option": option_summary, "indicators": indicators, "reasons": reasons, "plan": plan}
+        self._analysis_views[underlying] = {"live": live, "quote_meta": quote_meta, "score": score, "score_meta": score_meta, "option": option_summary, "indicator_summary": indicator_summary, "indicator_tables": indicator_tables, "reasons": reasons, "plan": plan}
         return page
 
     def _options_page(self) -> QWidget:
@@ -293,6 +299,20 @@ class MainWindow(QMainWindow):
         table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         table.setAlternatingRowColors(True)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        return table
+
+    def _indicator_table(self) -> QTableWidget:
+        table = QTableWidget(0, 4)
+        table.setObjectName("indicatorTable")
+        table.setHorizontalHeaderLabels(("INDICATOR", "LIVE VALUE", "STATE", "REASON"))
+        table.verticalHeader().setVisible(False)
+        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        table.setAlternatingRowColors(True)
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         return table
 
     def _paper_page(self) -> QWidget:
@@ -564,7 +584,8 @@ class MainWindow(QMainWindow):
             view["live"].setText(f"{quote.last_price:,.2f}")
             view["quote_meta"].setText(f"Bid / Ask: {_price_or_dash(quote.bid)} / {_price_or_dash(quote.ask)} | Live Kite quote")
         if analysis is not None:
-            view["indicators"].setText(_indicator_html(analysis))
+            view["indicator_summary"].setText(f"{len(analysis.readings)} configured rows | completed one-minute data updated {analysis.calculated_at.strftime('%H:%M:%S')}")  # type: ignore[union-attr]
+            self._refresh_indicator_tables(view["indicator_tables"], analysis, chain)  # type: ignore[arg-type]
         if chain is not None:
             view["option"].setText(_option_summary_html(chain))
         if conviction is not None:
@@ -574,7 +595,26 @@ class MainWindow(QMainWindow):
             plan_text = _plan_html(conviction)
             view["plan"].setText(plan_text)
             if "paper" in view:
-                view["paper"].setText(plan_text)
+                view["paper"].setText(plan_text)  # type: ignore[union-attr]
+
+    def _refresh_indicator_tables(
+        self, tables: dict[str, QTableWidget], analysis: IndicatorSnapshot, chain: OptionChainSnapshot | None
+    ) -> None:
+        """Render every configured reading once, grouped by indicator category."""
+        for category, table in tables.items():
+            readings = [reading for reading in analysis.readings if reading.category == category]
+            overrides = _option_indicator_overrides(chain) if category == "Options & Flow" and chain is not None else {}
+            table.setRowCount(len(readings))
+            for row, reading in enumerate(readings):
+                value, state, reason = overrides.get(reading.name, (reading.value, reading.state, reading.reason))
+                state_color = {
+                    "BULLISH": "#67e8a5", "BEARISH": "#fda4af", "NEUTRAL": "#facc15",
+                    "FEED REQUIRED": "#94a3b8", "WAITING": "#94a3b8",
+                }.get(state, "#cfe8ff")
+                for column, text in enumerate((reading.name, value, state, reason)):
+                    item = QTableWidgetItem(text)
+                    item.setForeground(QColor(state_color if column in (1, 2) else "#dce8f6"))
+                    table.setItem(row, column, item)
 
     def _refresh_option_table(self, chain: OptionChainSnapshot) -> None:
         summary = self._option_summaries.get(chain.underlying)
@@ -585,10 +625,14 @@ class MainWindow(QMainWindow):
         by_strike: dict[float, dict[OptionType, OptionMetric]] = {}
         for metric in chain.metrics:
             by_strike.setdefault(metric.contract.strike, {})[metric.contract.option_type] = metric
-        table.setRowCount(len(by_strike))
-        for row, strike in enumerate(sorted(by_strike)):
-            call = by_strike[strike].get(OptionType.CALL)
-            put = by_strike[strike].get(OptionType.PUT)
+        # Contract discovery occurs before every option receives its first tick.
+        # Preserve those strike rows so an empty table never looks like a broken
+        # option-chain subscription; pending fields remain an honest em dash.
+        strikes = sorted(set(chain.observed_strikes) | set(by_strike))
+        table.setRowCount(len(strikes))
+        for row, strike in enumerate(strikes):
+            call = by_strike.get(strike, {}).get(OptionType.CALL)
+            put = by_strike.get(strike, {}).get(OptionType.PUT)
             cells = (_metric_ltp(call), _metric_oi(call), _metric_oi_change(call), _metric_iv(call), _metric_velocity(call), f"{strike:,.0f}", _metric_velocity(put), _metric_iv(put), _metric_oi_change(put), _metric_oi(put), _metric_ltp(put))
             for column, text in enumerate(cells):
                 item = QTableWidgetItem(text)
@@ -690,6 +734,34 @@ def _metric_velocity(metric: OptionMetric | None) -> str:
     return _signed(metric.premium_velocity) if metric else "—"
 
 
+def _option_indicator_overrides(chain: OptionChainSnapshot) -> dict[str, tuple[str, str, str]]:
+    """Bring actually observed option metrics into the 100-indicator matrix."""
+    calls = [metric for metric in chain.metrics if metric.contract.option_type is OptionType.CALL]
+    puts = [metric for metric in chain.metrics if metric.contract.option_type is OptionType.PUT]
+    atm_calls = [metric for metric in calls if metric.contract.strike == chain.atm_strike]
+    atm_puts = [metric for metric in puts if metric.contract.strike == chain.atm_strike]
+    call_oi, put_oi = sum(metric.open_interest or 0 for metric in calls), sum(metric.open_interest or 0 for metric in puts)
+    call_delta = sum(metric.open_interest_change or 0 for metric in calls)
+    put_delta = sum(metric.open_interest_change or 0 for metric in puts)
+    atm_ivs = [metric.implied_volatility for metric in (*atm_calls, *atm_puts) if metric.implied_volatility is not None]
+    call_velocity = atm_calls[0].premium_velocity if atm_calls else None
+    put_velocity = atm_puts[0].premium_velocity if atm_puts else None
+    pcr_state = "BULLISH" if chain.put_call_ratio_oi is not None and chain.put_call_ratio_oi >= 1.15 else "BEARISH" if chain.put_call_ratio_oi is not None and chain.put_call_ratio_oi <= 0.85 else "NEUTRAL"
+    return {
+        "PCR (OI)": (_number(chain.put_call_ratio_oi, 2), pcr_state, "Observed put OI divided by observed call OI"),
+        "Call OI": (f"{call_oi:,}" if calls else "—", "INFO", "Observed subscribed call open interest"),
+        "Put OI": (f"{put_oi:,}" if puts else "—", "INFO", "Observed subscribed put open interest"),
+        "Session Call OI Delta": (f"{call_delta:+,}" if calls else "—", "INFO", "Change since NICE-PRO started this session"),
+        "Session Put OI Delta": (f"{put_delta:+,}" if puts else "—", "INFO", "Change since NICE-PRO started this session"),
+        "ATM IV": (_number(sum(atm_ivs) / len(atm_ivs) if atm_ivs else None, 1, "%"), "INFO", "Model-implied volatility from observed ATM options"),
+        "IV Skew": (_signed(chain.iv_skew, "%"), "BULLISH" if chain.iv_skew is not None and chain.iv_skew < 0 else "BEARISH" if chain.iv_skew is not None and chain.iv_skew > 0 else "NEUTRAL", "ATM put IV minus ATM call IV"),
+        "Expected Move": (_number(chain.expected_move), "INFO", "Observed ATM CE + PE premium, not a forecast"),
+        "Observed Max Pain": (_number(chain.observed_max_pain, 0), "INFO", "Computed from subscribed strikes only"),
+        "ATM CE Premium Velocity": (_signed(call_velocity), "BULLISH" if call_velocity is not None and call_velocity > 0 else "BEARISH" if call_velocity is not None and call_velocity < 0 else "NEUTRAL", "Observed ATM call premium change per second"),
+        "ATM PE Premium Velocity": (_signed(put_velocity), "BEARISH" if put_velocity is not None and put_velocity > 0 else "BULLISH" if put_velocity is not None and put_velocity < 0 else "NEUTRAL", "Observed ATM put premium change per second"),
+    }
+
+
 def run_dashboard(application: "Application") -> int:
     app = QApplication.instance() or QApplication([])
     window = MainWindow(application)
@@ -722,7 +794,7 @@ QLabel#quoteValue, QLabel#workspaceQuote { color: #f8fafc; font-size: 25px; font
 QLabel#quoteState { color: #52d8ff; font-size: 10px; font-weight: 800; }
 QLabel#convictionHeadline, QLabel#workspaceScore { color: #4ade80; font-size: 20px; font-weight: 900; }
 QLabel#scoreText { color: #dce8f6; font-size: 11px; font-weight: 800; }
-QLabel#workspaceMetrics, QLabel#workspaceReasons, QLabel#workspacePlan, QLabel#chainSummary { color: #dce8f6; font-size: 12px; }
+QLabel#workspaceReasons, QLabel#workspacePlan, QLabel#chainSummary { color: #dce8f6; font-size: 12px; }
 QProgressBar { height: 7px; border: 0; border-radius: 3px; background: #142942; }
 QProgressBar::chunk { border-radius: 3px; background: qlineargradient(x1:0, x2:1, stop:0 #f59e0b, stop:0.55 #b9d43e, stop:1 #22c55e); }
 QLabel#positiveEvidence { color: #62e99a; font-size: 11px; }
@@ -738,5 +810,6 @@ QTabWidget#chainTabs::pane { border: 1px solid #164269; background: #071627; }
 QTabBar::tab { background: #071627; color: #8ea4be; padding: 8px 18px; border: 1px solid #164269; }
 QTabBar::tab:selected { background: #082940; color: #38bdf8; }
 QTableWidget#optionTable { background: #06111f; alternate-background-color: #091b2c; border: 1px solid #164269; gridline-color: #16395d; color: #dce8f6; font-size: 11px; }
+QTableWidget#indicatorTable { background: #06111f; alternate-background-color: #091b2c; border: 1px solid #164269; gridline-color: #16395d; color: #dce8f6; font-size: 10px; }
 QHeaderView::section { background: #0b2137; color: #cfe8ff; border: 0; border-bottom: 1px solid #24618f; padding: 7px 2px; font-weight: 800; }
 """

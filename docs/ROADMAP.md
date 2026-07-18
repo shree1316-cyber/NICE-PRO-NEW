@@ -44,7 +44,15 @@
 - Observed ATM straddle, IV skew and observed max-pain context, clearly labelled as subscribed-strike calculations
 - Correct live connection status handling and no fabricated `0.00 / 0.00` bid/ask values
 
-## Next — Milestone 7: Paper trading, journal, and reports
+## Completed — Milestone 7: 100-indicator matrix
+
+- 100 transparent indicator rows across trend, momentum, volatility, levels, volume, and options/flow
+- Live values, coloured state, and an explanatory reason for every row
+- Honest `FEED REQUIRED` state for indicators needing data not yet supplied by the current subscription
+- Option-chain figures are injected into the options/flow matrix as real option ticks arrive
+- Contract-discovered strikes remain visible before their first quote arrives
+
+## Next — Milestone 8: Paper trading, journal, and reports
 
 - Paper positions and stop/target lifecycle simulation
 - Trade journal with evidence captured at entry

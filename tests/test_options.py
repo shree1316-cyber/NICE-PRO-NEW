@@ -18,4 +18,5 @@ def test_option_chain_reports_pcr_oi_and_premium_velocity() -> None:
     assert chain is not None
     assert chain.atm_strike == 25000
     assert chain.put_call_ratio_oi == 1500 / 1100
+    assert chain.observed_strikes == (25000,)
     assert next(metric for metric in chain.metrics if metric.contract.option_type is OptionType.CALL).premium_velocity == 1

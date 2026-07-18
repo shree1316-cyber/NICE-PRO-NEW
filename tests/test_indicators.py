@@ -26,3 +26,7 @@ def test_indicator_engine_identifies_aligned_uptrend() -> None:
     assert result.regime is MarketRegime.TREND_UP
     assert result.vwap is not None
     assert result.rsi is not None and result.rsi > 55
+    assert len(result.readings) == 100
+    assert {reading.category for reading in result.readings} == {
+        "Trend", "Momentum", "Volatility", "Levels", "Volume", "Options & Flow"
+    }
