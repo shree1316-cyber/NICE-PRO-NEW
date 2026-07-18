@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QDateTime, QObject, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -30,6 +31,39 @@ class DashboardSignals(QObject):
     options = Signal(object)
     conviction = Signal(object)
     status = Signal(str)
+
+
+class ConvictionGauge(QWidget):
+    """A compact semi-circular gauge for the dashboard conviction cards."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._score = 0
+        self.setMinimumSize(150, 92)
+        self.setMaximumHeight(120)
+
+    def set_score(self, score: int) -> None:
+        self._score = max(0, min(100, score))
+        self.update()
+
+    def paintEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.rect().adjusted(16, 12, -16, -2)
+        rect.setHeight(rect.width() // 2)
+        painter.setPen(QPen(QColor("#243b53"), 10, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.drawArc(rect, 30 * 16, 120 * 16)
+        color = QColor("#22c55e") if self._score >= 55 else QColor("#f59e0b") if self._score >= 40 else QColor("#ef4444")
+        painter.setPen(QPen(color, 10, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.drawArc(rect, 30 * 16, int(120 * 16 * self._score / 100))
+        painter.setPen(QColor("#e5edf8"))
+        font = painter.font()
+        font.setPointSize(21)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.drawText(self.rect().adjusted(0, 24, 0, 0), Qt.AlignmentFlag.AlignHCenter, str(self._score))
+        painter.end()
 
 
 class MainWindow(QMainWindow):
@@ -155,6 +189,7 @@ class MainWindow(QMainWindow):
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         body.addWidget(main, 1)
+        body.addWidget(self._rightbar(), 0)
         return page
 
     def _sidebar(self) -> QFrame:
@@ -180,6 +215,37 @@ class MainWindow(QMainWindow):
         self._alert_feed = self._muted("No A/A+ paper setup yet.\nAlert cooldown is active.")
         alerts_layout.addWidget(self._alert_feed)
         layout.addWidget(alerts)
+        breadth, breadth_layout = self._panel("MARKET BREADTH", "green")
+        self._breadth_label = self._muted("Awaiting advance / decline data")
+        breadth_layout.addWidget(self._breadth_label)
+        layout.addWidget(breadth)
+        layout.addStretch()
+        return side
+
+    def _rightbar(self) -> QFrame:
+        side = QFrame()
+        side.setObjectName("sidebar")
+        side.setMinimumWidth(180)
+        side.setMaximumWidth(210)
+        layout = QVBoxLayout(side)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+        session, session_layout = self._panel("TIME AND SESSION", "blue")
+        self._right_clock = QLabel("--:--:--")
+        self._right_clock.setObjectName("sessionClock")
+        session_layout.addWidget(self._right_clock)
+        session_layout.addWidget(self._muted("Intraday session\n09:15 AM - 03:30 PM"))
+        layout.addWidget(session)
+        system, system_layout = self._panel("SYSTEM STATUS", "green")
+        self._system_status = self._muted("Kite: Connecting\nData: Waiting\nOrder status: Paper mode\nEngine: Active")
+        system_layout.addWidget(self._system_status)
+        layout.addWidget(system)
+        global_cues, cues_layout = self._panel("GLOBAL CUES", "purple")
+        cues_layout.addWidget(self._muted("SGX Nifty  Awaiting feed\nUSD/INR  Awaiting feed\nCrude Oil  Awaiting feed\nIndia VIX  Awaiting feed"))
+        layout.addWidget(global_cues)
+        notifications, notification_layout = self._panel("NOTIFICATIONS", "amber")
+        notification_layout.addWidget(self._muted("No high-quality paper setup alert.\n\nUse the dashboard evidence before acting."))
+        layout.addWidget(notifications)
         layout.addStretch()
         return side
 
@@ -234,6 +300,10 @@ class MainWindow(QMainWindow):
 
     def _conviction_card(self, title: str) -> dict[str, object]:
         panel, layout = self._panel(title, "green")
+        content = QHBoxLayout()
+        gauge = ConvictionGauge()
+        content.addWidget(gauge, 0)
+        details = QVBoxLayout()
         headline = QLabel("WAIT")
         headline.setObjectName("convictionHeadline")
         score = QLabel("Confidence -- | Bull -- / Bear --")
@@ -242,11 +312,13 @@ class MainWindow(QMainWindow):
         bar.setRange(0, 100)
         bar.setTextVisible(False)
         detail = self._muted("Waiting for aligned market and option evidence")
-        layout.addWidget(headline)
-        layout.addWidget(score)
-        layout.addWidget(bar)
-        layout.addWidget(detail)
-        return {"panel": panel, "headline": headline, "score": score, "bar": bar, "detail": detail}
+        details.addWidget(headline)
+        details.addWidget(score)
+        details.addWidget(bar)
+        details.addWidget(detail)
+        content.addLayout(details, 1)
+        layout.addLayout(content)
+        return {"panel": panel, "headline": headline, "score": score, "bar": bar, "detail": detail, "gauge": gauge}
 
     def _evidence_card(self, title: str) -> dict[str, object]:
         panel, layout = self._panel(title, "amber")
@@ -339,6 +411,7 @@ class MainWindow(QMainWindow):
         self._connection_badge.style().unpolish(self._connection_badge)
         self._connection_badge.style().polish(self._connection_badge)
         self._overview_status.setText(f"<span style='color:#94a3b8'>STATUS</span><span style='float:right; color:#fbbf24'>{message[:18]}</span>")
+        self._system_status.setText(f"Kite: {'Connected' if connected else 'Connecting'}\nData: {message[:28]}\nOrder status: Paper mode\nEngine: Active")
 
     def update_analysis(self, analysis: IndicatorSnapshot) -> None:
         card = self._nifty_conviction if analysis.symbol == "NSE:NIFTY 50" else self._sensex_conviction
@@ -368,6 +441,8 @@ class MainWindow(QMainWindow):
         conviction["headline"].setText(f"{snapshot.grade} | {snapshot.side}")  # type: ignore[union-attr]
         conviction["score"].setText(f"Confidence {snapshot.confidence}%   Bull {snapshot.bullish_score} / Bear {snapshot.bearish_score}")  # type: ignore[union-attr]
         conviction["bar"].setValue(snapshot.confidence)  # type: ignore[union-attr]
+        gauge_score = snapshot.bullish_score if str(snapshot.side) == "BUY" else snapshot.bearish_score
+        conviction["gauge"].set_score(gauge_score)  # type: ignore[union-attr]
         evidence["positive"].setText("+ " + ("\n+ ".join(snapshot.bullish_reasons[:3]) or "No bullish evidence"))  # type: ignore[union-attr]
         evidence["negative"].setText("- " + ("\n- ".join(snapshot.bearish_reasons[:3]) or "No bearish evidence"))  # type: ignore[union-attr]
         evidence["caution"].setText(("CAUTION: " + snapshot.conflicts[0]) if snapshot.conflicts else "")  # type: ignore[union-attr]
@@ -392,6 +467,7 @@ class MainWindow(QMainWindow):
         now = QDateTime.currentDateTime()
         self._clock_label.setText(now.toString("hh:mm:ss AP | ddd, dd MMM"))
         self._session_clock.setText(now.toString("hh:mm:ss AP"))
+        self._right_clock.setText(now.toString("hh:mm:ss AP"))
 
     def closeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         self._application.stop()
