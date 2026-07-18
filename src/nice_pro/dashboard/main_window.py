@@ -1,5 +1,6 @@
 """Fast-scan PySide6 workspaces for the paper-only NICE-PRO engine."""
 
+from datetime import datetime, time
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QDateTime, QObject, Qt, QTimer, Signal
@@ -514,7 +515,7 @@ class MainWindow(QMainWindow):
         if quote is None:
             return
         card["value"].setText(f"{quote.last_price:,.2f}")  # type: ignore[union-attr]
-        card["state"].setText("LIVE MARKET QUOTE")  # type: ignore[union-attr]
+        card["state"].setText("LIVE MARKET QUOTE" if _market_is_open() else "LAST RECEIVED QUOTE — MARKET CLOSED")  # type: ignore[union-attr]
         card["micro"].setText(f"Bid / Ask  {_price_or_dash(quote.bid)} / {_price_or_dash(quote.ask)}")  # type: ignore[union-attr]
         name = card["key"]
         overview = self._overview_nifty if name == "NIFTY" else self._overview_sensex
@@ -552,13 +553,20 @@ class MainWindow(QMainWindow):
         evidence = self._nifty_evidence if snapshot.underlying == "NIFTY" else self._sensex_evidence
         plan_card = self._nifty_plan if snapshot.underlying == "NIFTY" else self._sensex_plan
         conviction["headline"].setText(f"{snapshot.grade} | {snapshot.side}")  # type: ignore[union-attr]
-        conviction["score"].setText(f"Confidence {snapshot.confidence}%   Bull {snapshot.bullish_score} / Bear {snapshot.bearish_score}")  # type: ignore[union-attr]
+        matrix_bull, matrix_bear, matrix_names = _matrix_state_counts(
+            self._analyses.get(snapshot.underlying), self._chains.get(snapshot.underlying)
+        )
+        conviction["score"].setText(f"Core: Bull {snapshot.bullish_score} / Bear {snapshot.bearish_score} | Matrix: Bull {matrix_bull} / Bear {matrix_bear}")  # type: ignore[union-attr]
         conviction["bar"].setValue(snapshot.confidence)  # type: ignore[union-attr]
         gauge_score = snapshot.bullish_score if str(snapshot.side) == "BUY" else snapshot.bearish_score
         conviction["gauge"].set_score(gauge_score)  # type: ignore[union-attr]
         evidence["positive"].setText("+ " + ("\n+ ".join(snapshot.bullish_reasons[:3]) or "No bullish evidence"))  # type: ignore[union-attr]
         evidence["negative"].setText("- " + ("\n- ".join(snapshot.bearish_reasons[:3]) or "No bearish evidence"))  # type: ignore[union-attr]
-        evidence["caution"].setText(("CAUTION: " + snapshot.conflicts[0]) if snapshot.conflicts else "")  # type: ignore[union-attr]
+        caution = ("CAUTION: " + snapshot.conflicts[0]) if snapshot.conflicts else ""
+        if matrix_bear:
+            matrix_note = f"MATRIX WATCH ({matrix_bear} bearish, not core-score votes): " + ", ".join(matrix_names[:3])
+            caution = f"{caution}\n{matrix_note}" if caution else matrix_note
+        evidence["caution"].setText(caution)  # type: ignore[union-attr]
         self._render_dashboard_plan(snapshot, plan_card)
         self._refresh_analysis_view(snapshot.underlying)
 
@@ -589,9 +597,10 @@ class MainWindow(QMainWindow):
         if chain is not None:
             view["option"].setText(_option_summary_html(chain))
         if conviction is not None:
-            view["score"].setText(f"{conviction.grade} | {conviction.side} | Bull {conviction.bullish_score} / Bear {conviction.bearish_score}")
-            view["score_meta"].setText(f"Confidence {conviction.confidence}% | Grade uses current observed data")
-            view["reasons"].setText(_reason_html(conviction))
+            matrix_bull, matrix_bear, matrix_names = _matrix_state_counts(analysis, chain)
+            view["score"].setText(f"{conviction.grade} | {conviction.side} | Core Bull {conviction.bullish_score} / Bear {conviction.bearish_score}")
+            view["score_meta"].setText(f"Core confidence {conviction.confidence}% | Matrix: Bull {matrix_bull} / Bear {matrix_bear}")
+            view["reasons"].setText(_reason_html(conviction, matrix_bear, matrix_names))
             plan_text = _plan_html(conviction)
             view["plan"].setText(plan_text)
             if "paper" in view:
@@ -692,11 +701,40 @@ def _option_summary_html(chain: OptionChainSnapshot) -> str:
     ))
 
 
-def _reason_html(snapshot: ConvictionSnapshot) -> str:
+def _reason_html(snapshot: ConvictionSnapshot, matrix_bear_count: int = 0, matrix_names: tuple[str, ...] = ()) -> str:
     bulls = "<br>".join(f"<span style='color:#67e8a5'>✓ {reason}</span>" for reason in snapshot.bullish_reasons) or "<span style='color:#94a3b8'>No bullish evidence</span>"
     bears = "<br>".join(f"<span style='color:#fda4af'>✕ {reason}</span>" for reason in snapshot.bearish_reasons) or "<span style='color:#94a3b8'>No bearish evidence</span>"
     cautions = "<br>".join(f"<span style='color:#facc15'>! {reason}</span>" for reason in snapshot.conflicts)
-    return f"<b style='color:#67e8a5'>BULLISH</b><br>{bulls}<br><br><b style='color:#fda4af'>BEARISH</b><br>{bears}" + (f"<br><br><b style='color:#facc15'>CAUTION</b><br>{cautions}" if cautions else "")
+    matrix_watch = ""
+    if matrix_bear_count:
+        matrix_watch = f"<br><br><b style='color:#facc15'>MATRIX WATCH</b><br><span style='color:#facc15'>{matrix_bear_count} bearish readings not included as core-score votes: {', '.join(matrix_names[:5])}</span>"
+    return f"<b style='color:#67e8a5'>BULLISH</b><br>{bulls}<br><br><b style='color:#fda4af'>BEARISH</b><br>{bears}" + (f"<br><br><b style='color:#facc15'>CAUTION</b><br>{cautions}" if cautions else "") + matrix_watch
+
+
+def _matrix_state_counts(
+    analysis: IndicatorSnapshot | None, chain: OptionChainSnapshot | None
+) -> tuple[int, int, tuple[str, ...]]:
+    """Count display states without turning correlated indicators into votes.
+
+    The conviction engine deliberately retains a smaller independent core. Matrix
+    counts are shown for context, not summed into the trade score.
+    """
+    if analysis is None:
+        return 0, 0, ()
+    overrides = _option_indicator_overrides(chain) if chain is not None else {}
+    states = [(reading.name, overrides.get(reading.name, (reading.value, reading.state, reading.reason))[1]) for reading in analysis.readings]
+    bullish = sum(1 for _, state in states if state == "BULLISH")
+    bearish_names = tuple(name for name, state in states if state == "BEARISH")
+    return bullish, len(bearish_names), bearish_names
+
+
+def _market_is_open() -> bool:
+    """Use local India market hours to avoid presenting Saturday data as live."""
+    now = datetime.now().astimezone()
+    if now.weekday() >= 5:
+        return False
+    current = now.time()
+    return time(9, 15) <= current <= time(15, 30)
 
 
 def _plan_html(snapshot: ConvictionSnapshot) -> str:
