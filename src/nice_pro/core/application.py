@@ -110,7 +110,9 @@ class Application:
                 self.publish_status(f"option discovery skipped for {underlying}: no spot quote")
                 continue
             try:
-                contracts = self.kite.nearest_option_contracts(underlying, spot)
+                contracts = self.kite.nearest_option_contracts(
+                    underlying, spot, strikes_each_side=self.settings.option_strikes_each_side
+                )
                 if not contracts:
                     self.publish_status(f"no current {underlying} option contracts found")
                     continue

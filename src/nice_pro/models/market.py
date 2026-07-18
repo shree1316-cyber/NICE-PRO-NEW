@@ -73,6 +73,12 @@ class OptionChainSnapshot:
     atm_strike: float | None
     put_call_ratio_oi: float | None
     metrics: tuple[OptionMetric, ...] = ()
+    # These values are derived only from the strikes currently subscribed by
+    # NICE-PRO. They are deliberately labelled "observed" in the UI and must
+    # not be mistaken for full-exchange option-chain calculations.
+    observed_max_pain: float | None = None
+    iv_skew: float | None = None
+    expected_move: float | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -36,7 +36,15 @@
 - Explicit evidence and conflict reasons
 - Trade-quality grades, risk limits, and paper-trade-only plans
 
-## Next — Milestone 6: Paper trading, journal, and reports
+## Completed — Milestone 6: Live analysis workspaces and expanded option context
+
+- Full NIFTY and SENSEX workspaces: live price, indicator values, evidence, conflicts, score, grade and paper plan
+- Live NIFTY and SENSEX option-chain tables with CE/PE LTP, OI, session OI delta, model IV and premium velocity
+- Expanded default ATM range to five strikes on each side (configurable)
+- Observed ATM straddle, IV skew and observed max-pain context, clearly labelled as subscribed-strike calculations
+- Correct live connection status handling and no fabricated `0.00 / 0.00` bid/ask values
+
+## Next — Milestone 7: Paper trading, journal, and reports
 
 - Paper positions and stop/target lifecycle simulation
 - Trade journal with evidence captured at entry

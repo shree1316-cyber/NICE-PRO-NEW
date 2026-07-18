@@ -1,4 +1,4 @@
-"""Fast-scan desktop dashboard with functional workspace tabs."""
+"""Fast-scan PySide6 workspaces for the paper-only NICE-PRO engine."""
 
 from typing import TYPE_CHECKING
 
@@ -9,17 +9,29 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QMainWindow,
     QProgressBar,
     QPushButton,
     QSizePolicy,
     QStackedWidget,
+    QTabWidget,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from nice_pro.models.market import ConvictionSnapshot, IndicatorSnapshot, MarketSnapshot, OptionChainSnapshot
+from nice_pro.models.market import (
+    ConvictionSnapshot,
+    IndicatorSnapshot,
+    MarketSnapshot,
+    OptionChainSnapshot,
+    OptionMetric,
+    OptionType,
+    Quote,
+)
 
 if TYPE_CHECKING:
     from nice_pro.core.application import Application
@@ -34,7 +46,7 @@ class DashboardSignals(QObject):
 
 
 class ConvictionGauge(QWidget):
-    """A compact semi-circular gauge for the dashboard conviction cards."""
+    """Compact semi-circle that keeps the directional score easy to scan."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -67,12 +79,21 @@ class ConvictionGauge(QWidget):
 
 
 class MainWindow(QMainWindow):
-    """One-screen dashboard plus focused NIFTY, SENSEX, options and plan tabs."""
+    """Dashboard plus live NIFTY, SENSEX, option-chain and plan workspaces."""
 
     def __init__(self, application: "Application") -> None:
         super().__init__()
         self._application = application
         self._signals = DashboardSignals()
+        self._quotes: dict[str, Quote] = {}
+        self._analyses: dict[str, IndicatorSnapshot] = {}
+        self._chains: dict[str, OptionChainSnapshot] = {}
+        self._convictions: dict[str, ConvictionSnapshot] = {}
+        self._kite_connected = False
+        self._nav_buttons: list[QPushButton] = []
+        self._analysis_views: dict[str, dict[str, QLabel]] = {}
+        self._option_tables: dict[str, QTableWidget] = {}
+        self._option_summaries: dict[str, QLabel] = {}
         self._signals.snapshot.connect(self.update_snapshot)
         self._signals.analysis.connect(self.update_analysis)
         self._signals.options.connect(self.update_options)
@@ -86,7 +107,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("NICE-PRO | Intraday Conviction Engine")
         self.resize(1600, 920)
         self.setMinimumSize(1100, 650)
-        self._nav_buttons: list[QPushButton] = []
         self._build()
         self._clock = QTimer(self)
         self._clock.timeout.connect(self._refresh_clock)
@@ -102,12 +122,12 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._navigation())
         self._pages = QStackedWidget()
         self._pages.addWidget(self._dashboard_page())
-        self._pages.addWidget(self._focus_page("NIFTY ANALYSIS", "NIFTY", "NIFTY focus data will appear here."))
-        self._pages.addWidget(self._focus_page("SENSEX ANALYSIS", "SENSEX", "SENSEX focus data will appear here."))
-        self._pages.addWidget(self._focus_page("OPTION CHAIN", "OPTIONS", "ATM option-chain data will appear here."))
-        self._pages.addWidget(self._focus_page("PAPER TRADE", "PAPER", "Paper-only trade plans will appear here."))
-        self._pages.addWidget(self._placeholder_page("JOURNAL", "Journal is scheduled for Milestone 6."))
-        self._pages.addWidget(self._placeholder_page("REPORTS", "Performance reports are scheduled for Milestone 6."))
+        self._pages.addWidget(self._analysis_page("NIFTY"))
+        self._pages.addWidget(self._analysis_page("SENSEX"))
+        self._pages.addWidget(self._options_page())
+        self._pages.addWidget(self._paper_page())
+        self._pages.addWidget(self._placeholder_page("JOURNAL", "Journal and annotated review arrive in the next research milestone."))
+        self._pages.addWidget(self._placeholder_page("REPORTS", "Performance reports are scheduled after paper-trade data is collected."))
         layout.addWidget(self._pages, 1)
         layout.addWidget(self._footer())
         self.setCentralWidget(root)
@@ -146,8 +166,7 @@ class MainWindow(QMainWindow):
         nav.setObjectName("navigation")
         layout = QHBoxLayout(nav)
         layout.setContentsMargins(10, 5, 10, 5)
-        labels = ("DASHBOARD", "NIFTY", "SENSEX", "OPTIONS", "PAPER TRADE", "JOURNAL", "REPORTS")
-        for index, label in enumerate(labels):
+        for index, label in enumerate(("DASHBOARD", "NIFTY", "SENSEX", "OPTIONS", "PAPER TRADE", "JOURNAL", "REPORTS")):
             button = QPushButton(label)
             button.setObjectName("navButton")
             button.clicked.connect(lambda checked=False, page=index: self._switch_page(page))
@@ -162,7 +181,6 @@ class MainWindow(QMainWindow):
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(8)
         body.addWidget(self._sidebar(), 0)
-
         main = QWidget()
         grid = QGridLayout(main)
         grid.setContentsMargins(0, 0, 0, 0)
@@ -170,26 +188,127 @@ class MainWindow(QMainWindow):
         grid.setVerticalSpacing(8)
         self._nifty_quote = self._quote_card("NIFTY 50", "NIFTY")
         self._sensex_quote = self._quote_card("SENSEX", "SENSEX")
-        grid.addWidget(self._nifty_quote["panel"], 0, 0)
-        grid.addWidget(self._sensex_quote["panel"], 0, 1)
         self._nifty_conviction = self._conviction_card("NIFTY INTRADAY CONVICTION")
         self._sensex_conviction = self._conviction_card("SENSEX INTRADAY CONVICTION")
-        grid.addWidget(self._nifty_conviction["panel"], 1, 0)
-        grid.addWidget(self._sensex_conviction["panel"], 1, 1)
         self._nifty_evidence = self._evidence_card("NIFTY EVIDENCE")
         self._sensex_evidence = self._evidence_card("SENSEX EVIDENCE")
-        grid.addWidget(self._nifty_evidence["panel"], 2, 0)
-        grid.addWidget(self._sensex_evidence["panel"], 2, 1)
         self._nifty_plan = self._plan_card("NIFTY PAPER PLAN")
         self._sensex_plan = self._plan_card("SENSEX PAPER PLAN")
-        grid.addWidget(self._nifty_plan["panel"], 3, 0)
-        grid.addWidget(self._sensex_plan["panel"], 3, 1)
+        for row, widgets in enumerate(((self._nifty_quote, self._sensex_quote), (self._nifty_conviction, self._sensex_conviction), (self._nifty_evidence, self._sensex_evidence), (self._nifty_plan, self._sensex_plan))):
+            grid.addWidget(widgets[0]["panel"], row, 0)  # type: ignore[arg-type]
+            grid.addWidget(widgets[1]["panel"], row, 1)  # type: ignore[arg-type]
         for row, stretch in enumerate((8, 10, 11, 12)):
             grid.setRowStretch(row, stretch)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         body.addWidget(main, 1)
         body.addWidget(self._rightbar(), 0)
+        return page
+
+    def _analysis_page(self, underlying: str) -> QWidget:
+        """Full live workspace for a single underlying, rather than a placeholder."""
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        top = QGridLayout()
+        top.setSpacing(8)
+        live_panel, live_layout = self._panel(f"{underlying} LIVE MARKET", "blue")
+        live = QLabel("Waiting for a live quote")
+        live.setObjectName("workspaceQuote")
+        quote_meta = self._muted("Bid / Ask: — / —")
+        live_layout.addWidget(live)
+        live_layout.addWidget(quote_meta)
+        score_panel, score_layout = self._panel("CONVICTION, SCORE & GRADE", "green")
+        score = QLabel("WAIT | Score unavailable")
+        score.setObjectName("workspaceScore")
+        score_meta = self._muted("Need aligned market and option evidence")
+        score_layout.addWidget(score)
+        score_layout.addWidget(score_meta)
+        option_panel, option_layout = self._panel("OPTION CONTEXT", "purple")
+        option_summary = self._muted("Waiting for ATM option discovery")
+        option_layout.addWidget(option_summary)
+        top.addWidget(live_panel, 0, 0)
+        top.addWidget(score_panel, 0, 1)
+        top.addWidget(option_panel, 0, 2)
+        for col in range(3):
+            top.setColumnStretch(col, 1)
+        layout.addLayout(top)
+        middle = QHBoxLayout()
+        indicators_panel, indicators_layout = self._panel("LIVE INDICATOR VALUES", "blue")
+        indicators = QLabel("Waiting for one-minute history")
+        indicators.setObjectName("workspaceMetrics")
+        indicators.setWordWrap(True)
+        indicators_layout.addWidget(indicators)
+        middle.addWidget(indicators_panel, 1)
+        reasons_panel, reasons_layout = self._panel("EVIDENCE & CONFLICTS", "amber")
+        reasons = QLabel("Waiting for conviction evaluation")
+        reasons.setObjectName("workspaceReasons")
+        reasons.setWordWrap(True)
+        reasons_layout.addWidget(reasons)
+        middle.addWidget(reasons_panel, 1)
+        plan_panel, plan_layout = self._panel("PAPER TRADE PLAN", "purple")
+        plan = QLabel("No paper setup")
+        plan.setObjectName("workspacePlan")
+        plan.setWordWrap(True)
+        plan_layout.addWidget(plan)
+        middle.addWidget(plan_panel, 1)
+        layout.addLayout(middle, 1)
+        self._analysis_views[underlying] = {"live": live, "quote_meta": quote_meta, "score": score, "score_meta": score_meta, "option": option_summary, "indicators": indicators, "reasons": reasons, "plan": plan}
+        return page
+
+    def _options_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        heading, heading_layout = self._panel("LIVE OPTION CHAIN — OBSERVED STRIKES", "purple")
+        heading_layout.addWidget(self._muted("Live LTP, OI, session OI delta, model IV and premium velocity. Values use the currently subscribed ATM range; no order is submitted."))
+        layout.addWidget(heading)
+        tabs = QTabWidget()
+        tabs.setObjectName("chainTabs")
+        for underlying in ("NIFTY", "SENSEX"):
+            tab = QWidget()
+            tab_layout = QVBoxLayout(tab)
+            tab_layout.setContentsMargins(6, 6, 6, 6)
+            summary = QLabel("Waiting for live option-chain data")
+            summary.setObjectName("chainSummary")
+            summary.setWordWrap(True)
+            tab_layout.addWidget(summary)
+            table = self._option_table()
+            tab_layout.addWidget(table, 1)
+            tabs.addTab(tab, underlying)
+            self._option_summaries[underlying] = summary
+            self._option_tables[underlying] = table
+        layout.addWidget(tabs, 1)
+        return page
+
+    def _option_table(self) -> QTableWidget:
+        headers = ("CALL LTP", "CALL OI", "CALL ΔOI", "CALL IV", "CALL Vel", "STRIKE", "PUT Vel", "PUT IV", "PUT ΔOI", "PUT OI", "PUT LTP")
+        table = QTableWidget(0, len(headers))
+        table.setObjectName("optionTable")
+        table.setHorizontalHeaderLabels(headers)
+        table.verticalHeader().setVisible(False)
+        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        table.setAlternatingRowColors(True)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        return table
+
+    def _paper_page(self) -> QWidget:
+        page = QWidget()
+        layout = QHBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        for underlying in ("NIFTY", "SENSEX"):
+            panel, panel_layout = self._panel(f"{underlying} PAPER-TRADE PLAN", "purple")
+            detail = QLabel("No paper setup yet")
+            detail.setObjectName("workspacePlan")
+            detail.setWordWrap(True)
+            panel_layout.addWidget(detail)
+            panel_layout.addStretch()
+            layout.addWidget(panel)
+            self._analysis_views.setdefault(underlying, {})["paper"] = detail
         return page
 
     def _sidebar(self) -> QFrame:
@@ -216,8 +335,7 @@ class MainWindow(QMainWindow):
         alerts_layout.addWidget(self._alert_feed)
         layout.addWidget(alerts)
         breadth, breadth_layout = self._panel("MARKET BREADTH", "green")
-        self._breadth_label = self._muted("Awaiting advance / decline data")
-        breadth_layout.addWidget(self._breadth_label)
+        breadth_layout.addWidget(self._muted("Not connected yet\nAdvance/decline feed arrives in the market-data milestone."))
         layout.addWidget(breadth)
         layout.addStretch()
         return side
@@ -240,50 +358,14 @@ class MainWindow(QMainWindow):
         self._system_status = self._muted("Kite: Connecting\nData: Waiting\nOrder status: Paper mode\nEngine: Active")
         system_layout.addWidget(self._system_status)
         layout.addWidget(system)
-        global_cues, cues_layout = self._panel("GLOBAL CUES", "purple")
-        cues_layout.addWidget(self._muted("SGX Nifty  Awaiting feed\nUSD/INR  Awaiting feed\nCrude Oil  Awaiting feed\nIndia VIX  Awaiting feed"))
-        layout.addWidget(global_cues)
-        notifications, notification_layout = self._panel("NOTIFICATIONS", "amber")
-        notification_layout.addWidget(self._muted("No high-quality paper setup alert.\n\nUse the dashboard evidence before acting."))
-        layout.addWidget(notifications)
+        pending, pending_layout = self._panel("PENDING DATA FEEDS", "purple")
+        pending_layout.addWidget(self._muted("India VIX\nIndex futures\nMarket breadth\nGlobal cues\nBook imbalance"))
+        layout.addWidget(pending)
+        notices, notices_layout = self._panel("NOTIFICATIONS", "amber")
+        notices_layout.addWidget(self._muted("All recommendations are decision support only. Verify the evidence and risk before acting."))
+        layout.addWidget(notices)
         layout.addStretch()
         return side
-
-    def _focus_page(self, title: str, key: str, initial_text: str) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, 0)
-        panel, panel_layout = self._panel(title, "blue")
-        panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        detail = QLabel(initial_text)
-        detail.setObjectName("focusDetail")
-        detail.setWordWrap(True)
-        panel_layout.addWidget(detail)
-        panel_layout.addStretch()
-        layout.addWidget(panel)
-        if key == "NIFTY":
-            self._nifty_focus = detail
-        elif key == "SENSEX":
-            self._sensex_focus = detail
-        elif key == "OPTIONS":
-            self._options_focus = detail
-        else:
-            self._paper_focus = detail
-        return page
-
-    def _placeholder_page(self, title: str, text: str) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, 0)
-        panel, panel_layout = self._panel(title, "purple")
-        panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        heading = QLabel("COMING NEXT")
-        heading.setObjectName("placeholderHeading")
-        panel_layout.addWidget(heading)
-        panel_layout.addWidget(self._muted(text))
-        panel_layout.addStretch()
-        layout.addWidget(panel)
-        return page
 
     def _quote_card(self, title: str, key: str) -> dict[str, object]:
         panel, layout = self._panel(title, "blue")
@@ -291,7 +373,7 @@ class MainWindow(QMainWindow):
         value.setObjectName("quoteValue")
         state = QLabel("WAITING FOR LIVE QUOTE")
         state.setObjectName("quoteState")
-        micro = QLabel("Bid / Ask  -- / --")
+        micro = QLabel("Bid / Ask  — / —")
         micro.setObjectName("micro")
         layout.addWidget(value)
         layout.addWidget(state)
@@ -342,6 +424,20 @@ class MainWindow(QMainWindow):
         layout.addWidget(detail)
         return {"panel": panel, "status": status, "detail": detail}
 
+    def _placeholder_page(self, title: str, text: str) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        panel, panel_layout = self._panel(title, "purple")
+        panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        heading = QLabel("COMING NEXT")
+        heading.setObjectName("placeholderHeading")
+        panel_layout.addWidget(heading)
+        panel_layout.addWidget(self._muted(text))
+        panel_layout.addStretch()
+        layout.addWidget(panel)
+        return page
+
     @staticmethod
     def _panel(title: str, accent: str) -> tuple[QFrame, QVBoxLayout]:
         panel = QFrame()
@@ -388,53 +484,50 @@ class MainWindow(QMainWindow):
             button.style().polish(button)
 
     def update_snapshot(self, snapshot: MarketSnapshot) -> None:
+        self._quotes = snapshot.quotes.copy()
         self._update_quote(self._nifty_quote, snapshot.quote_for("NSE:NIFTY 50"))
         self._update_quote(self._sensex_quote, snapshot.quote_for("BSE:SENSEX"))
+        self._refresh_analysis_view("NIFTY")
+        self._refresh_analysis_view("SENSEX")
 
-    def _update_quote(self, card: dict[str, object], quote) -> None:  # type: ignore[no-untyped-def]
+    def _update_quote(self, card: dict[str, object], quote: Quote | None) -> None:
         if quote is None:
             return
         card["value"].setText(f"{quote.last_price:,.2f}")  # type: ignore[union-attr]
         card["state"].setText("LIVE MARKET QUOTE")  # type: ignore[union-attr]
-        card["micro"].setText(f"Bid / Ask  {quote.bid or 0:,.2f} / {quote.ask or 0:,.2f}")  # type: ignore[union-attr]
+        card["micro"].setText(f"Bid / Ask  {_price_or_dash(quote.bid)} / {_price_or_dash(quote.ask)}")  # type: ignore[union-attr]
         name = card["key"]
         overview = self._overview_nifty if name == "NIFTY" else self._overview_sensex
         overview.setText(f"<span style='color:#94a3b8'>{name}</span><span style='float:right; color:#4ade80'>{quote.last_price:,.2f}</span>")
-        focus = self._nifty_focus if name == "NIFTY" else self._sensex_focus
-        focus.setText(f"<b>{name} LIVE</b><br><br>LTP: <b>{quote.last_price:,.2f}</b><br>Bid / Ask: {quote.bid or 0:,.2f} / {quote.ask or 0:,.2f}")
 
     def update_status(self, message: str) -> None:
         text = message.upper()
-        connected = "CONNECTED" in text or "ACTIVE" in text
-        self._connection_badge.setText("KITE CONNECTED" if connected else "DATA STATUS")
-        self._connection_badge.setProperty("connected", connected)
+        if "CONNECTED" in text or "LIVE QUOTE STREAM ACTIVE" in text:
+            self._kite_connected = True
+        elif "RECONNECTING" in text or "CLOSED" in text or "ERROR" in text or "LIMIT REACHED" in text:
+            self._kite_connected = False
+        self._connection_badge.setText("KITE CONNECTED" if self._kite_connected else "DATA STATUS")
+        self._connection_badge.setProperty("connected", self._kite_connected)
         self._connection_badge.style().unpolish(self._connection_badge)
         self._connection_badge.style().polish(self._connection_badge)
         self._overview_status.setText(f"<span style='color:#94a3b8'>STATUS</span><span style='float:right; color:#fbbf24'>{message[:18]}</span>")
-        self._system_status.setText(f"Kite: {'Connected' if connected else 'Connecting'}\nData: {message[:28]}\nOrder status: Paper mode\nEngine: Active")
+        connection = "Connected" if self._kite_connected else "Connecting"
+        self._system_status.setText(f"Kite: {connection}\nData: {message[:28]}\nOrder status: Paper mode\nEngine: Active")
 
     def update_analysis(self, analysis: IndicatorSnapshot) -> None:
-        card = self._nifty_conviction if analysis.symbol == "NSE:NIFTY 50" else self._sensex_conviction
-        text = f"{analysis.regime} | VWAP {analysis.vwap:,.2f}" if analysis.vwap is not None else str(analysis.regime)
-        card["detail"].setText(text)  # type: ignore[union-attr]
-        focus = self._nifty_focus if analysis.symbol == "NSE:NIFTY 50" else self._sensex_focus
-        if analysis.vwap is not None:
-            focus.setText(
-                f"<b>{analysis.symbol}</b><br><br>Regime: <b>{analysis.regime}</b><br>VWAP: {analysis.vwap:,.2f}<br>"
-                f"EMA 9 / 21: {analysis.ema_fast:,.2f} / {analysis.ema_slow:,.2f}<br>RSI: {analysis.rsi:.0f} | ATR: {analysis.atr:,.2f}"
-            )
+        underlying = _underlying_for_symbol(analysis.symbol)
+        self._analyses[underlying] = analysis
+        card = self._nifty_conviction if underlying == "NIFTY" else self._sensex_conviction
+        card["detail"].setText(_analysis_summary(analysis))  # type: ignore[union-attr]
+        self._refresh_analysis_view(underlying)
 
     def update_options(self, chain: OptionChainSnapshot) -> None:
-        data = [
-            f"<b>{chain.underlying} ATM</b>: {chain.atm_strike:,.0f}" if chain.atm_strike is not None else f"<b>{chain.underlying}</b>: awaiting ATM",
-            f"PCR (OI): {chain.put_call_ratio_oi:.2f}" if chain.put_call_ratio_oi is not None else "PCR (OI): warming up",
-        ]
-        ivs = [metric.implied_volatility for metric in chain.metrics if metric.implied_volatility is not None]
-        if ivs:
-            data.append(f"Model IV: {min(ivs):.1f}% to {max(ivs):.1f}%")
-        self._options_focus.setText("<br><br>".join(data))
+        self._chains[chain.underlying] = chain
+        self._refresh_option_table(chain)
+        self._refresh_analysis_view(chain.underlying)
 
     def update_conviction(self, snapshot: ConvictionSnapshot) -> None:
+        self._convictions[snapshot.underlying] = snapshot
         conviction = self._nifty_conviction if snapshot.underlying == "NIFTY" else self._sensex_conviction
         evidence = self._nifty_evidence if snapshot.underlying == "NIFTY" else self._sensex_evidence
         plan_card = self._nifty_plan if snapshot.underlying == "NIFTY" else self._sensex_plan
@@ -446,22 +539,67 @@ class MainWindow(QMainWindow):
         evidence["positive"].setText("+ " + ("\n+ ".join(snapshot.bullish_reasons[:3]) or "No bullish evidence"))  # type: ignore[union-attr]
         evidence["negative"].setText("- " + ("\n- ".join(snapshot.bearish_reasons[:3]) or "No bearish evidence"))  # type: ignore[union-attr]
         evidence["caution"].setText(("CAUTION: " + snapshot.conflicts[0]) if snapshot.conflicts else "")  # type: ignore[union-attr]
+        self._render_dashboard_plan(snapshot, plan_card)
+        self._refresh_analysis_view(snapshot.underlying)
+
+    def _render_dashboard_plan(self, snapshot: ConvictionSnapshot, card: dict[str, object]) -> None:
         if snapshot.plan is None:
-            plan_card["status"].setText("NO PAPER SETUP")  # type: ignore[union-attr]
-            plan_card["detail"].setText("Need A/A+ grade, ATM quote, and risk inside the configured cap.")  # type: ignore[union-attr]
-        else:
-            plan = snapshot.plan
-            plan_card["status"].setText(f"PAPER ONLY | {plan.option_symbol}")  # type: ignore[union-attr]
-            plan_card["detail"].setText(
-                f"Entry {plan.entry:.2f} | SL {plan.stop_loss:.2f} | T1 {plan.target_1:.2f} | T2 {plan.target_2:.2f}\n"
-                f"Max loss/lot Rs. {plan.max_loss_per_lot:,.0f} | Lot {plan.lot_size}"
-            )  # type: ignore[union-attr]
-            self._alert_feed.setText(f"{snapshot.underlying} {snapshot.grade} paper setup\n{plan.option_symbol} | Risk-capped plan available")
-            self._paper_focus.setText(
-                f"<b>{snapshot.underlying} PAPER PLAN</b><br><br>{plan.option_symbol}<br>Entry: {plan.entry:.2f}<br>"
-                f"Stop Loss: {plan.stop_loss:.2f}<br>Target 1: {plan.target_1:.2f}<br>Target 2: {plan.target_2:.2f}<br>"
-                f"Maximum loss/lot: Rs. {plan.max_loss_per_lot:,.0f}<br><br><i>No order is submitted.</i>"
-            )
+            card["status"].setText("NO PAPER SETUP")  # type: ignore[union-attr]
+            card["detail"].setText("Need A/A+ grade, ATM quote, and risk inside the configured cap.")  # type: ignore[union-attr]
+            return
+        plan = snapshot.plan
+        card["status"].setText(f"PAPER ONLY | {plan.option_symbol}")  # type: ignore[union-attr]
+        card["detail"].setText(f"Entry {plan.entry:.2f} | SL {plan.stop_loss:.2f} | T1 {plan.target_1:.2f} | T2 {plan.target_2:.2f}\nMax loss/lot Rs. {plan.max_loss_per_lot:,.0f} | Lot {plan.lot_size}")  # type: ignore[union-attr]
+        self._alert_feed.setText(f"{snapshot.underlying} {snapshot.grade} paper setup\n{plan.option_symbol} | Risk-capped plan available")
+
+    def _refresh_analysis_view(self, underlying: str) -> None:
+        view = self._analysis_views.get(underlying)
+        if not view:
+            return
+        quote = self._quotes.get("NSE:NIFTY 50" if underlying == "NIFTY" else "BSE:SENSEX")
+        analysis = self._analyses.get(underlying)
+        chain = self._chains.get(underlying)
+        conviction = self._convictions.get(underlying)
+        if quote is not None:
+            view["live"].setText(f"{quote.last_price:,.2f}")
+            view["quote_meta"].setText(f"Bid / Ask: {_price_or_dash(quote.bid)} / {_price_or_dash(quote.ask)} | Live Kite quote")
+        if analysis is not None:
+            view["indicators"].setText(_indicator_html(analysis))
+        if chain is not None:
+            view["option"].setText(_option_summary_html(chain))
+        if conviction is not None:
+            view["score"].setText(f"{conviction.grade} | {conviction.side} | Bull {conviction.bullish_score} / Bear {conviction.bearish_score}")
+            view["score_meta"].setText(f"Confidence {conviction.confidence}% | Grade uses current observed data")
+            view["reasons"].setText(_reason_html(conviction))
+            plan_text = _plan_html(conviction)
+            view["plan"].setText(plan_text)
+            if "paper" in view:
+                view["paper"].setText(plan_text)
+
+    def _refresh_option_table(self, chain: OptionChainSnapshot) -> None:
+        summary = self._option_summaries.get(chain.underlying)
+        table = self._option_tables.get(chain.underlying)
+        if summary is None or table is None:
+            return
+        summary.setText(_option_summary_html(chain))
+        by_strike: dict[float, dict[OptionType, OptionMetric]] = {}
+        for metric in chain.metrics:
+            by_strike.setdefault(metric.contract.strike, {})[metric.contract.option_type] = metric
+        table.setRowCount(len(by_strike))
+        for row, strike in enumerate(sorted(by_strike)):
+            call = by_strike[strike].get(OptionType.CALL)
+            put = by_strike[strike].get(OptionType.PUT)
+            cells = (_metric_ltp(call), _metric_oi(call), _metric_oi_change(call), _metric_iv(call), _metric_velocity(call), f"{strike:,.0f}", _metric_velocity(put), _metric_iv(put), _metric_oi_change(put), _metric_oi(put), _metric_ltp(put))
+            for column, text in enumerate(cells):
+                item = QTableWidgetItem(text)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                if column == 5:
+                    item.setForeground(QColor("#facc15"))
+                elif column in (0, 1, 2, 3, 4):
+                    item.setForeground(QColor("#67e8a5"))
+                else:
+                    item.setForeground(QColor("#fda4af"))
+                table.setItem(row, column, item)
 
     def _refresh_clock(self) -> None:
         now = QDateTime.currentDateTime()
@@ -472,6 +610,84 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         self._application.stop()
         event.accept()
+
+
+def _underlying_for_symbol(symbol: str) -> str:
+    return "NIFTY" if "NIFTY" in symbol else "SENSEX"
+
+
+def _price_or_dash(value: float | None) -> str:
+    return f"{value:,.2f}" if value is not None and value > 0 else "—"
+
+
+def _analysis_summary(analysis: IndicatorSnapshot) -> str:
+    return f"{analysis.regime} | VWAP {_number(analysis.vwap)} | RSI {_number(analysis.rsi, 0)}"
+
+
+def _indicator_html(analysis: IndicatorSnapshot) -> str:
+    rows = [
+        ("Regime", str(analysis.regime)), ("VWAP", _number(analysis.vwap)),
+        ("EMA 9", _number(analysis.ema_fast)), ("EMA 21", _number(analysis.ema_slow)),
+        ("RSI", _number(analysis.rsi, 1)), ("ATR", _number(analysis.atr)),
+        ("Relative volume", _number(analysis.relative_volume, 2, suffix="x")),
+        ("Opening range", f"{_number(analysis.opening_range_low)} – {_number(analysis.opening_range_high)}"),
+    ]
+    reasons = "<br>".join(f"<span style='color:#67e8a5'>• {reason}</span>" for reason in analysis.reasons)
+    values = "".join(f"<tr><td>{name}</td><td><b>{value}</b></td></tr>" for name, value in rows)
+    return f"<table width='100%'>{values}</table><br>{reasons}"
+
+
+def _option_summary_html(chain: OptionChainSnapshot) -> str:
+    return "<br>".join((
+        f"ATM strike: <b>{_number(chain.atm_strike, 0)}</b>",
+        f"PCR (OI): <b>{_number(chain.put_call_ratio_oi, 2)}</b>",
+        f"Observed max pain: <b>{_number(chain.observed_max_pain, 0)}</b>",
+        f"ATM IV skew (Put − Call): <b>{_signed(chain.iv_skew, '%')}</b>",
+        f"ATM straddle / expected move: <b>{_number(chain.expected_move)}</b>",
+        "<span style='color:#facc15'>Observed subscribed strikes only; not a full-exchange chain.</span>",
+    ))
+
+
+def _reason_html(snapshot: ConvictionSnapshot) -> str:
+    bulls = "<br>".join(f"<span style='color:#67e8a5'>✓ {reason}</span>" for reason in snapshot.bullish_reasons) or "<span style='color:#94a3b8'>No bullish evidence</span>"
+    bears = "<br>".join(f"<span style='color:#fda4af'>✕ {reason}</span>" for reason in snapshot.bearish_reasons) or "<span style='color:#94a3b8'>No bearish evidence</span>"
+    cautions = "<br>".join(f"<span style='color:#facc15'>! {reason}</span>" for reason in snapshot.conflicts)
+    return f"<b style='color:#67e8a5'>BULLISH</b><br>{bulls}<br><br><b style='color:#fda4af'>BEARISH</b><br>{bears}" + (f"<br><br><b style='color:#facc15'>CAUTION</b><br>{cautions}" if cautions else "")
+
+
+def _plan_html(snapshot: ConvictionSnapshot) -> str:
+    if snapshot.plan is None:
+        return "<b style='color:#d8b4fe'>NO PAPER SETUP</b><br><br>Requires A/A+ grade, an ATM quote, and risk inside the configured maximum loss per lot."
+    plan = snapshot.plan
+    return f"<b style='color:#d8b4fe'>PAPER ONLY | {plan.option_symbol}</b><br><br>Entry: <b>{plan.entry:.2f}</b><br>Stop loss: <b>{plan.stop_loss:.2f}</b><br>Target 1: <b>{plan.target_1:.2f}</b><br>Target 2: <b>{plan.target_2:.2f}</b><br>Maximum loss / lot: <b>Rs. {plan.max_loss_per_lot:,.0f}</b><br>Lot size: <b>{plan.lot_size}</b><br><br><span style='color:#facc15'>No order is submitted.</span>"
+
+
+def _number(value: float | None, decimals: int = 2, suffix: str = "") -> str:
+    return f"{value:,.{decimals}f}{suffix}" if value is not None else "—"
+
+
+def _signed(value: float | None, suffix: str = "") -> str:
+    return f"{value:+.2f}{suffix}" if value is not None else "—"
+
+
+def _metric_ltp(metric: OptionMetric | None) -> str:
+    return _number(metric.last_price) if metric else "—"
+
+
+def _metric_oi(metric: OptionMetric | None) -> str:
+    return f"{metric.open_interest:,}" if metric and metric.open_interest is not None else "—"
+
+
+def _metric_oi_change(metric: OptionMetric | None) -> str:
+    return f"{metric.open_interest_change:+,}" if metric and metric.open_interest_change is not None else "—"
+
+
+def _metric_iv(metric: OptionMetric | None) -> str:
+    return _number(metric.implied_volatility, 1, "%") if metric else "—"
+
+
+def _metric_velocity(metric: OptionMetric | None) -> str:
+    return _signed(metric.premium_velocity) if metric else "—"
 
 
 def run_dashboard(application: "Application") -> int:
@@ -502,10 +718,11 @@ QFrame#panel[accent="blue"] { border-top: 2px solid #2589cf; }
 QFrame#panel[accent="purple"] { border-top: 2px solid #9b63e5; }
 QFrame#panel[accent="amber"] { border-top: 2px solid #d79c2f; }
 QLabel#panelTitle { color: #f2f6fb; font-size: 12px; font-weight: 900; }
-QLabel#quoteValue { color: #f8fafc; font-size: 25px; font-weight: 900; }
+QLabel#quoteValue, QLabel#workspaceQuote { color: #f8fafc; font-size: 25px; font-weight: 900; }
 QLabel#quoteState { color: #52d8ff; font-size: 10px; font-weight: 800; }
-QLabel#convictionHeadline { color: #4ade80; font-size: 22px; font-weight: 900; }
+QLabel#convictionHeadline, QLabel#workspaceScore { color: #4ade80; font-size: 20px; font-weight: 900; }
 QLabel#scoreText { color: #dce8f6; font-size: 11px; font-weight: 800; }
+QLabel#workspaceMetrics, QLabel#workspaceReasons, QLabel#workspacePlan, QLabel#chainSummary { color: #dce8f6; font-size: 12px; }
 QProgressBar { height: 7px; border: 0; border-radius: 3px; background: #142942; }
 QProgressBar::chunk { border-radius: 3px; background: qlineargradient(x1:0, x2:1, stop:0 #f59e0b, stop:0.55 #b9d43e, stop:1 #22c55e); }
 QLabel#positiveEvidence { color: #62e99a; font-size: 11px; }
@@ -515,7 +732,11 @@ QLabel#planStatus { color: #d8b4fe; font-size: 13px; font-weight: 900; }
 QLabel#sessionClock { color: #f8fafc; font-size: 22px; font-weight: 900; }
 QLabel#muted, QLabel#micro { color: #94a9c2; font-size: 10px; }
 QLabel#marketRow { border-bottom: 1px solid #123250; padding: 5px 0; font-size: 11px; }
-QLabel#focusDetail { color: #dbeafe; font-size: 15px; }
 QLabel#placeholderHeading { color: #b59cff; font-size: 24px; font-weight: 900; }
 QFrame#footer { color: #71839d; font-size: 10px; }
+QTabWidget#chainTabs::pane { border: 1px solid #164269; background: #071627; }
+QTabBar::tab { background: #071627; color: #8ea4be; padding: 8px 18px; border: 1px solid #164269; }
+QTabBar::tab:selected { background: #082940; color: #38bdf8; }
+QTableWidget#optionTable { background: #06111f; alternate-background-color: #091b2c; border: 1px solid #164269; gridline-color: #16395d; color: #dce8f6; font-size: 11px; }
+QHeaderView::section { background: #0b2137; color: #cfe8ff; border: 0; border-bottom: 1px solid #24618f; padding: 7px 2px; font-weight: 800; }
 """

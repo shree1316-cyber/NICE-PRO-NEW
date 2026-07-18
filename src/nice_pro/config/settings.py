@@ -15,6 +15,7 @@ class Settings:
     log_level: str = "INFO"
     dashboard_refresh_ms: int = 500
     paper_trading_only: bool = True
+    option_strikes_each_side: int = 5
     subscriptions: tuple["Subscription", ...] = ()
 
     @classmethod
@@ -28,6 +29,7 @@ class Settings:
             dashboard_refresh_ms=int(getenv("NICE_DASHBOARD_REFRESH_MS", "500")),
             paper_trading_only=getenv("NICE_PAPER_TRADING_ONLY", "true").lower()
             in {"1", "true", "yes", "on"},
+            option_strikes_each_side=max(1, int(getenv("NICE_OPTION_STRIKES_EACH_SIDE", "5"))),
             subscriptions=_parse_subscriptions(
                 getenv("NICE_SUBSCRIPTIONS", "NSE:NIFTY 50:256265,BSE:SENSEX:265")
             ),

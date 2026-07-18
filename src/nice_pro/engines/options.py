@@ -44,6 +44,9 @@ class OptionChainEngine:
         pcr = puts_oi / calls_oi if calls_oi else None
         strikes = sorted({contract.strike for contract in contracts})
         atm = min(strikes, key=lambda strike: abs(strike - spot)) if strikes and spot is not None else None
+        observed_max_pain = _observed_max_pain(metrics, strikes)
+        iv_skew = _atm_iv_skew(metrics, atm)
+        expected_move = _atm_straddle(metrics, atm)
         return OptionChainSnapshot(
             underlying=underlying,
             calculated_at=datetime.now(tz=IST),
@@ -51,6 +54,9 @@ class OptionChainEngine:
             atm_strike=atm,
             put_call_ratio_oi=pcr,
             metrics=metrics,
+            observed_max_pain=observed_max_pain,
+            iv_skew=iv_skew,
+            expected_move=expected_move,
         )
 
     def _metric(self, contract: OptionContract, spot: float | None) -> OptionMetric | None:
@@ -69,6 +75,44 @@ def _premium_velocity(quotes: tuple[Quote, ...]) -> float | None:
         return None
     elapsed = (quotes[-1].received_at - quotes[0].received_at).total_seconds()
     return (quotes[-1].last_price - quotes[0].last_price) / elapsed if elapsed > 0 else None
+
+
+def _observed_max_pain(metrics: tuple[OptionMetric, ...], strikes: list[float]) -> float | None:
+    """Approximate max pain using only strikes that NICE-PRO subscribes to.
+
+    A full-exchange max-pain figure needs OI at every strike. This function is
+    intentionally scoped to observed contracts so it cannot silently imply
+    exchange-wide coverage.
+    """
+    if not strikes or not metrics:
+        return None
+    losses: dict[float, float] = {}
+    for settlement in strikes:
+        total = 0.0
+        for metric in metrics:
+            oi = metric.open_interest or 0
+            if metric.contract.option_type is OptionType.CALL:
+                total += max(0.0, settlement - metric.contract.strike) * oi
+            else:
+                total += max(0.0, metric.contract.strike - settlement) * oi
+        losses[settlement] = total
+    return min(losses, key=losses.get)
+
+
+def _atm_iv_skew(metrics: tuple[OptionMetric, ...], atm: float | None) -> float | None:
+    if atm is None:
+        return None
+    ivs = {metric.contract.option_type: metric.implied_volatility for metric in metrics if metric.contract.strike == atm}
+    call, put = ivs.get(OptionType.CALL), ivs.get(OptionType.PUT)
+    return put - call if call is not None and put is not None else None
+
+
+def _atm_straddle(metrics: tuple[OptionMetric, ...], atm: float | None) -> float | None:
+    if atm is None:
+        return None
+    premiums = {metric.contract.option_type: metric.last_price for metric in metrics if metric.contract.strike == atm}
+    call, put = premiums.get(OptionType.CALL), premiums.get(OptionType.PUT)
+    return call + put if call is not None and put is not None else None
 
 
 def _implied_volatility(contract: OptionContract, quote: Quote, spot: float | None, rate: float) -> float | None:
