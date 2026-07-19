@@ -19,6 +19,8 @@ from nice_pro.engines.options import OptionChainEngine
 from nice_pro.models.market import ConvictionSnapshot, IndicatorSnapshot, MarketSnapshot, OptionChainSnapshot, Quote
 from nice_pro.services.kite import KiteService
 
+ANALYSIS_TIMEFRAMES = (10, 30, 60, 300, 900, 1800, 3600)
+
 
 class Application:
     def __init__(self, settings: Settings) -> None:
@@ -79,9 +81,8 @@ class Application:
         for listener in tuple(self._snapshot_listeners):
             listener(update.snapshot)
         for candle in update.closed_candles:
-            if candle.timeframe_seconds == 60:
-                self.history.append(candle)
-                self._publish_analysis(candle.symbol)
+            self.history.append(candle)
+            self._publish_analysis(candle.symbol, candle.timeframe_seconds)
 
     def publish_status(self, message: str) -> None:
         for listener in tuple(self._status_listeners):
@@ -91,8 +92,9 @@ class Application:
         self.publish_status("warming up one-minute indicator history")
         for subscription in self.settings.subscriptions:
             try:
-                self.history.extend(self.kite.historical_minute_candles(subscription))
-                self._publish_analysis(subscription.symbol)
+                self.history.extend(self.kite.historical_minute_candles(subscription, lookback_days=15))
+                for timeframe_seconds in ANALYSIS_TIMEFRAMES:
+                    self._publish_analysis(subscription.symbol, timeframe_seconds)
             except Exception as error:
                 logger.exception("History warm-up failed for {}", subscription.symbol)
                 self.publish_status(f"history warm-up failed for {subscription.symbol}: {error}")
@@ -132,13 +134,19 @@ class Application:
     def _underlying_from_option_symbol(symbol: str) -> str:
         return "NIFTY" if "NIFTY" in symbol else "SENSEX"
 
-    def _publish_analysis(self, symbol: str) -> None:
-        snapshot = self.indicators.evaluate(symbol, self.history.for_symbol(symbol))
+    def _publish_analysis(self, symbol: str, timeframe_seconds: int) -> None:
+        snapshot = self.indicators.evaluate(
+            symbol, self.history.for_symbol(symbol, timeframe_seconds), timeframe_seconds
+        )
         underlying = "NIFTY" if "NIFTY" in symbol else "SENSEX"
-        self._analysis_by_underlying[underlying] = snapshot
+        # The one-minute model remains the paper-plan decision source until
+        # multi-timeframe weights are validated in backtests.
+        if timeframe_seconds == 60:
+            self._analysis_by_underlying[underlying] = snapshot
         for listener in tuple(self._analysis_listeners):
             listener(snapshot)
-        self._evaluate_conviction(underlying)
+        if timeframe_seconds == 60:
+            self._evaluate_conviction(underlying)
 
     def _publish_option(self, snapshot: OptionChainSnapshot) -> None:
         self._options_by_underlying[snapshot.underlying] = snapshot

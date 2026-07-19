@@ -129,6 +129,7 @@ class IndicatorSnapshot:
     symbol: str
     regime: MarketRegime
     calculated_at: datetime
+    timeframe_seconds: int = 60
     close: float | None = None
     vwap: float | None = None
     ema_fast: float | None = None

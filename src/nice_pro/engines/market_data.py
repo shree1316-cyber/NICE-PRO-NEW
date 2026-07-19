@@ -14,7 +14,9 @@ class MarketUpdate:
 
 
 class MarketDataEngine:
-    def __init__(self, state: MarketState, timeframes: tuple[int, ...] = (10, 30, 60)) -> None:
+    def __init__(
+        self, state: MarketState, timeframes: tuple[int, ...] = (10, 30, 60, 300, 900, 1800, 3600)
+    ) -> None:
         self._state = state
         self._builders = tuple(CandleBuilder(timeframe) for timeframe in timeframes)
 

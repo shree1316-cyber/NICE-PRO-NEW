@@ -17,12 +17,16 @@ class IndicatorEngine:
     probability estimate. Weights and trade decisions arrive in later milestones.
     """
 
-    def evaluate(self, symbol: str, candles: tuple[Candle, ...]) -> IndicatorSnapshot:
+    def evaluate(
+        self, symbol: str, candles: tuple[Candle, ...], timeframe_seconds: int | None = None
+    ) -> IndicatorSnapshot:
+        actual_timeframe = timeframe_seconds or (candles[-1].timeframe_seconds if candles else 60)
         if len(candles) < 21:
             return IndicatorSnapshot(
                 symbol=symbol,
                 regime=MarketRegime.INSUFFICIENT_DATA,
                 calculated_at=_latest_time(candles),
+                timeframe_seconds=actual_timeframe,
                 close=candles[-1].close if candles else None,
                 reasons=(f"Waiting for 21 one-minute candles ({len(candles)}/21 collected)",),
                 readings=_waiting_readings(len(candles)),
@@ -40,6 +44,7 @@ class IndicatorEngine:
             symbol=symbol,
             regime=regime,
             calculated_at=candles[-1].closed_at,
+            timeframe_seconds=candles[-1].timeframe_seconds,
             close=closes[-1],
             vwap=vwap,
             ema_fast=fast,

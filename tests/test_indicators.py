@@ -30,3 +30,10 @@ def test_indicator_engine_identifies_aligned_uptrend() -> None:
     assert {reading.category for reading in result.readings} == {
         "Trend", "Momentum", "Volatility", "Levels", "Volume", "Options & Flow"
     }
+
+
+def test_indicator_engine_preserves_requested_timeframe_while_waiting_for_tick_history() -> None:
+    result = IndicatorEngine().evaluate("NSE:NIFTY 50", (), timeframe_seconds=10)
+
+    assert result.timeframe_seconds == 10
+    assert result.regime is MarketRegime.INSUFFICIENT_DATA

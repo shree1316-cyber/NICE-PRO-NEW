@@ -2,7 +2,7 @@
 
 NIFTY & SENSEX Intraday Conviction Engine — a transparent, paper-trading-first desktop decision-support application.
 
-> **Status:** Milestone 7. The focused NIFTY/SENSEX workspaces include a 100-row indicator matrix grouped by category. Values are calculated where the present feed supports them; missing inputs are explicitly shown as `FEED REQUIRED` rather than invented.
+> **Status:** Milestone 8. The NIFTY/SENSEX indicator matrix now displays every configured indicator across 10s, 30s, 1m, 5m, 15m, 30m and 1h. Each value is calculated only from its corresponding timeframe; unavailable tick-history fields remain explicit.
 
 ## Principles
 
@@ -29,6 +29,6 @@ Run the checks with `python -m pytest`. See [Run NICE-PRO](docs/RUN_NICE_PRO.md)
 
 `Kite service → Event bus → Market state → Analysis engines → Dashboard`
 
-The app streams only explicitly subscribed market data. The option-chain page labels its Max Pain and similar figures as **observed** because the calculation uses subscribed strikes rather than every exchange strike. It contains no order-placement API. A trade plan is a paper-only candidate and is never an instruction or guarantee.
+The app streams only explicitly subscribed market data. The option-chain page labels its Max Pain and similar figures as **observed** because the calculation uses subscribed strikes rather than every exchange strike. The paper-plan conviction score remains a **one-minute core model** until multi-timeframe weighting is validated by backtesting; the other timeframe columns are displayed as independent context. It contains no order-placement API. A trade plan is a paper-only candidate and is never an instruction or guarantee.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ROADMAP.md](docs/ROADMAP.md).

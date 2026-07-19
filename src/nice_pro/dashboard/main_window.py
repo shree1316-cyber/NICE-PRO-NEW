@@ -87,7 +87,7 @@ class MainWindow(QMainWindow):
         self._application = application
         self._signals = DashboardSignals()
         self._quotes: dict[str, Quote] = {}
-        self._analyses: dict[str, IndicatorSnapshot] = {}
+        self._analyses: dict[str, dict[int, IndicatorSnapshot]] = {"NIFTY": {}, "SENSEX": {}}
         self._chains: dict[str, OptionChainSnapshot] = {}
         self._convictions: dict[str, ConvictionSnapshot] = {}
         self._kite_connected = False
@@ -236,8 +236,8 @@ class MainWindow(QMainWindow):
             top.setColumnStretch(col, 1)
         layout.addLayout(top)
         middle = QHBoxLayout()
-        indicators_panel, indicators_layout = self._panel("100-INDICATOR MATRIX", "blue")
-        indicator_summary = self._muted("Live price/candle indicators plus explicit feed requirements for volume, options and order-flow indicators.")
+        indicators_panel, indicators_layout = self._panel("100-INDICATOR MULTI-TIMEFRAME MATRIX", "blue")
+        indicator_summary = self._muted("Rows are indicators; columns are 10s, 30s, 1m, 5m, 15m, 30m and 1h. Each cell is calculated only from its own timeframe.")
         indicators_layout.addWidget(indicator_summary)
         indicator_tabs = QTabWidget()
         indicator_tabs.setObjectName("chainTabs")
@@ -303,17 +303,18 @@ class MainWindow(QMainWindow):
         return table
 
     def _indicator_table(self) -> QTableWidget:
-        table = QTableWidget(0, 4)
+        headers = ("INDICATOR", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "REASON")
+        table = QTableWidget(0, len(headers))
         table.setObjectName("indicatorTable")
-        table.setHorizontalHeaderLabels(("INDICATOR", "LIVE VALUE", "STATE", "REASON"))
+        table.setHorizontalHeaderLabels(headers)
         table.verticalHeader().setVisible(False)
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         table.setAlternatingRowColors(True)
         table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        for column in range(1, 8):
+            table.horizontalHeader().setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(8, QHeaderView.ResizeMode.Stretch)
         return table
 
     def _paper_page(self) -> QWidget:
@@ -537,9 +538,10 @@ class MainWindow(QMainWindow):
 
     def update_analysis(self, analysis: IndicatorSnapshot) -> None:
         underlying = _underlying_for_symbol(analysis.symbol)
-        self._analyses[underlying] = analysis
-        card = self._nifty_conviction if underlying == "NIFTY" else self._sensex_conviction
-        card["detail"].setText(_analysis_summary(analysis))  # type: ignore[union-attr]
+        self._analyses.setdefault(underlying, {})[analysis.timeframe_seconds] = analysis
+        if analysis.timeframe_seconds == 60:
+            card = self._nifty_conviction if underlying == "NIFTY" else self._sensex_conviction
+            card["detail"].setText(_analysis_summary(analysis))  # type: ignore[union-attr]
         self._refresh_analysis_view(underlying)
 
     def update_options(self, chain: OptionChainSnapshot) -> None:
@@ -554,9 +556,9 @@ class MainWindow(QMainWindow):
         plan_card = self._nifty_plan if snapshot.underlying == "NIFTY" else self._sensex_plan
         conviction["headline"].setText(f"{snapshot.grade} | {snapshot.side}")  # type: ignore[union-attr]
         matrix_bull, matrix_bear, matrix_names = _matrix_state_counts(
-            self._analyses.get(snapshot.underlying), self._chains.get(snapshot.underlying)
+            self._analyses.get(snapshot.underlying, {}).get(60), self._chains.get(snapshot.underlying)
         )
-        conviction["score"].setText(f"Core: Bull {snapshot.bullish_score} / Bear {snapshot.bearish_score} | Matrix: Bull {matrix_bull} / Bear {matrix_bear}")  # type: ignore[union-attr]
+        conviction["score"].setText(f"Core (1m): Bull {snapshot.bullish_score} / Bear {snapshot.bearish_score} | Matrix: Bull {matrix_bull} / Bear {matrix_bear}")  # type: ignore[union-attr]
         conviction["bar"].setValue(snapshot.confidence)  # type: ignore[union-attr]
         gauge_score = snapshot.bullish_score if str(snapshot.side) == "BUY" else snapshot.bearish_score
         conviction["gauge"].set_score(gauge_score)  # type: ignore[union-attr]
@@ -585,21 +587,22 @@ class MainWindow(QMainWindow):
         if not view:
             return
         quote = self._quotes.get("NSE:NIFTY 50" if underlying == "NIFTY" else "BSE:SENSEX")
-        analysis = self._analyses.get(underlying)
+        analyses = self._analyses.get(underlying, {})
+        analysis = analyses.get(60)
         chain = self._chains.get(underlying)
         conviction = self._convictions.get(underlying)
         if quote is not None:
             view["live"].setText(f"{quote.last_price:,.2f}")
             view["quote_meta"].setText(f"Bid / Ask: {_price_or_dash(quote.bid)} / {_price_or_dash(quote.ask)} | Live Kite quote")
-        if analysis is not None:
-            view["indicator_summary"].setText(f"{len(analysis.readings)} configured rows | completed one-minute data updated {analysis.calculated_at.strftime('%H:%M:%S')}")  # type: ignore[union-attr]
-            self._refresh_indicator_tables(view["indicator_tables"], analysis, chain)  # type: ignore[arg-type]
+        if analyses:
+            view["indicator_summary"].setText(_timeframe_summary(analyses))  # type: ignore[union-attr]
+            self._refresh_indicator_tables(view["indicator_tables"], analyses, chain)  # type: ignore[arg-type]
         if chain is not None:
             view["option"].setText(_option_summary_html(chain))
         if conviction is not None:
             matrix_bull, matrix_bear, matrix_names = _matrix_state_counts(analysis, chain)
-            view["score"].setText(f"{conviction.grade} | {conviction.side} | Core Bull {conviction.bullish_score} / Bear {conviction.bearish_score}")
-            view["score_meta"].setText(f"Core confidence {conviction.confidence}% | Matrix: Bull {matrix_bull} / Bear {matrix_bear}")
+            view["score"].setText(f"{conviction.grade} | {conviction.side} | 1m Core Bull {conviction.bullish_score} / Bear {conviction.bearish_score}")
+            view["score_meta"].setText(f"1m core confidence {conviction.confidence}% | Matrix: Bull {matrix_bull} / Bear {matrix_bear}")
             view["reasons"].setText(_reason_html(conviction, matrix_bear, matrix_names))
             plan_text = _plan_html(conviction)
             view["plan"].setText(plan_text)
@@ -607,22 +610,30 @@ class MainWindow(QMainWindow):
                 view["paper"].setText(plan_text)  # type: ignore[union-attr]
 
     def _refresh_indicator_tables(
-        self, tables: dict[str, QTableWidget], analysis: IndicatorSnapshot, chain: OptionChainSnapshot | None
+        self, tables: dict[str, QTableWidget], analyses: dict[int, IndicatorSnapshot], chain: OptionChainSnapshot | None
     ) -> None:
-        """Render every configured reading once, grouped by indicator category."""
+        """Render every indicator row across all requested timeframes."""
+        primary = analyses.get(60) or next(iter(analyses.values()))
         for category, table in tables.items():
-            readings = [reading for reading in analysis.readings if reading.category == category]
+            readings = [reading for reading in primary.readings if reading.category == category]
             overrides = _option_indicator_overrides(chain) if category == "Options & Flow" and chain is not None else {}
             table.setRowCount(len(readings))
             for row, reading in enumerate(readings):
-                value, state, reason = overrides.get(reading.name, (reading.value, reading.state, reading.reason))
-                state_color = {
-                    "BULLISH": "#67e8a5", "BEARISH": "#fda4af", "NEUTRAL": "#facc15",
-                    "FEED REQUIRED": "#94a3b8", "WAITING": "#94a3b8",
-                }.get(state, "#cfe8ff")
-                for column, text in enumerate((reading.name, value, state, reason)):
+                cells: list[tuple[str, str, str]] = [(reading.name, "#dce8f6", reading.reason)]
+                for timeframe in (10, 30, 60, 300, 900, 1800, 3600):
+                    timeframe_snapshot = analyses.get(timeframe)
+                    candidate = next(
+                        (item for item in timeframe_snapshot.readings if item.name == reading.name), None
+                    ) if timeframe_snapshot is not None else None
+                    value, state, reason = overrides.get(reading.name, (candidate.value, candidate.state, candidate.reason)) if candidate is not None else ("—", "WAITING", "Awaiting timeframe history")
+                    color = _state_color(state)
+                    cells.append((f"{value}\n{state}", color, reason))
+                cells.append((reading.reason, "#94a9c2", reading.reason))
+                for column, (text, color, tooltip) in enumerate(cells):
                     item = QTableWidgetItem(text)
-                    item.setForeground(QColor(state_color if column in (1, 2) else "#dce8f6"))
+                    item.setForeground(QColor(color))
+                    item.setToolTip(tooltip)
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter if 0 < column < 8 else Qt.AlignmentFlag.AlignLeft)
                     table.setItem(row, column, item)
 
     def _refresh_option_table(self, chain: OptionChainSnapshot) -> None:
@@ -735,6 +746,29 @@ def _market_is_open() -> bool:
         return False
     current = now.time()
     return time(9, 15) <= current <= time(15, 30)
+
+
+def _state_color(state: str) -> str:
+    return {
+        "BULLISH": "#67e8a5",
+        "BEARISH": "#fda4af",
+        "NEUTRAL": "#facc15",
+        "FEED REQUIRED": "#94a3b8",
+        "WAITING": "#94a3b8",
+        "INFO": "#cfe8ff",
+    }.get(state, "#cfe8ff")
+
+
+def _timeframe_summary(analyses: dict[int, IndicatorSnapshot]) -> str:
+    labels = {10: "10s", 30: "30s", 60: "1m", 300: "5m", 900: "15m", 1800: "30m", 3600: "1h"}
+    summaries = []
+    for timeframe, label in labels.items():
+        snapshot = analyses.get(timeframe)
+        if snapshot is None:
+            summaries.append(f"{label}: waiting")
+        else:
+            summaries.append(f"{label}: {snapshot.regime}")
+    return " | ".join(summaries)
 
 
 def _plan_html(snapshot: ConvictionSnapshot) -> str:

@@ -52,7 +52,15 @@
 - Option-chain figures are injected into the options/flow matrix as real option ticks arrive
 - Contract-discovered strikes remain visible before their first quote arrives
 
-## Next — Milestone 8: Paper trading, journal, and reports
+## Completed — Milestone 8: Multi-timeframe analysis
+
+- Tick-built 10-second and 30-second bars, plus 1m, 5m, 15m, 30m and 1h analysis bars
+- Historical one-minute warm-up resampled for higher timeframes
+- 100-indicator matrix renders each indicator against its own timeframe column
+- Timeframe-specific regimes are visible in the NIFTY and SENSEX workspaces
+- Existing paper-plan score explicitly labelled as the one-minute core pending multi-timeframe validation
+
+## Next — Milestone 9: Paper trading, journal, and reports
 
 - Paper positions and stop/target lifecycle simulation
 - Trade journal with evidence captured at entry
