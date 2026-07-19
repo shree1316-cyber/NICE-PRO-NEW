@@ -154,7 +154,9 @@ class Application:
 
     def _evaluate_conviction(self, underlying: str) -> None:
         analyses = self._analysis_by_underlying.get(underlying, {})
-        analysis = analyses.get(60)
+        # Five minutes is the stable core model.  The 1m snapshot remains an
+        # entry/confirmation input inside the multi-timeframe gate.
+        analysis = analyses.get(300)
         options = self._options_by_underlying.get(underlying)
         if analysis is None or options is None:
             return

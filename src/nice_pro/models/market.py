@@ -117,6 +117,9 @@ class ConvictionSnapshot:
     mtf_alignment: str = "CORE ONLY"
     entry_timing: str = "NOT ASSESSED"
     timeframe_signals: tuple["TimeframeSignal", ...] = ()
+    # The 5-minute snapshot is the stable audit model.  The multi-timeframe
+    # gate still combines all horizons before a paper plan is eligible.
+    core_timeframe_seconds: int = 300
 
 
 @dataclass(frozen=True, slots=True)

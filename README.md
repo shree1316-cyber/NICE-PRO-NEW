@@ -36,7 +36,7 @@ The app streams only explicitly subscribed market data. The option-chain page la
 - **10s / 30s (5% each):** entry timing only; they never reverse the wider thesis.
 - **1m (20%) + 5m (25%):** must agree on direction before a paper plan is eligible.
 - **15m (20%), 30m (15%), 1h (10%):** confirmation filters; a direct opposing signal blocks the plan.
-- The original **1m core score** remains visible for auditability, but it is not the final plan score.
+- The **5m core score** remains visible for auditability, while the MTF gate remains the final paper-plan decision layer.
 
 The timeframe weights are deliberately category-level safeguards, not a claim that all 100 indicator rows are independent votes. They must be validated with paper-trade and historical results before being relied on. NICE-PRO contains no order-placement API. A trade plan is a paper-only candidate and is never an instruction or guarantee.
 

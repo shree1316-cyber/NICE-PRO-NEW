@@ -86,5 +86,6 @@ def test_multi_timeframe_alignment_can_create_a_paper_plan() -> None:
     assert result.mtf_bullish_score == 100
     assert result.mtf_alignment == "STRONG ALIGNMENT"
     assert result.entry_timing == "ALIGNED"
+    assert result.core_timeframe_seconds == 300
     assert result.grade is TradeGrade.A_PLUS
     assert result.plan is not None

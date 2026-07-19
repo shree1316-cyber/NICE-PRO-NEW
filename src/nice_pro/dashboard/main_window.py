@@ -223,7 +223,8 @@ class MainWindow(QMainWindow):
         live_layout.addWidget(quote_meta)
         score_panel, score_layout = self._panel("CONVICTION, SCORE & GRADE", "green")
         score = QLabel("WAIT | Score unavailable")
-        score.setObjectName("workspaceScore")
+        score.setObjectName("convictionBox")
+        score.setWordWrap(True)
         score_meta = self._muted("Need aligned market and option evidence")
         score_layout.addWidget(score)
         score_layout.addWidget(score_meta)
@@ -540,9 +541,6 @@ class MainWindow(QMainWindow):
     def update_analysis(self, analysis: IndicatorSnapshot) -> None:
         underlying = _underlying_for_symbol(analysis.symbol)
         self._analyses.setdefault(underlying, {})[analysis.timeframe_seconds] = analysis
-        if analysis.timeframe_seconds == 60:
-            card = self._nifty_conviction if underlying == "NIFTY" else self._sensex_conviction
-            card["detail"].setText(_analysis_summary(analysis))  # type: ignore[union-attr]
         self._refresh_analysis_view(underlying)
 
     def update_options(self, chain: OptionChainSnapshot) -> None:
@@ -555,17 +553,21 @@ class MainWindow(QMainWindow):
         conviction = self._nifty_conviction if snapshot.underlying == "NIFTY" else self._sensex_conviction
         evidence = self._nifty_evidence if snapshot.underlying == "NIFTY" else self._sensex_evidence
         plan_card = self._nifty_plan if snapshot.underlying == "NIFTY" else self._sensex_plan
-        conviction["headline"].setText(f"{snapshot.grade} | {snapshot.side}")  # type: ignore[union-attr]
+        conviction["headline"].setText(f"{snapshot.grade} | {_decision_direction(snapshot)}")  # type: ignore[union-attr]
         matrix_bull, matrix_bear, matrix_names = _matrix_state_counts(
             self._analyses.get(snapshot.underlying, {}).get(60), self._chains.get(snapshot.underlying)
         )
         conviction["score"].setText(
-            f"MTF: Bull {snapshot.mtf_bullish_score} / Bear {snapshot.mtf_bearish_score} | "
-            f"{snapshot.mtf_alignment} | Core 1m: Bull {snapshot.bullish_score} / Bear {snapshot.bearish_score}"
+            f"MTF CONVICTION: {max(snapshot.mtf_bullish_score, snapshot.mtf_bearish_score)} / 100 | "
+            f"Bull {snapshot.mtf_bullish_score} / Bear {snapshot.mtf_bearish_score}"
         )  # type: ignore[union-attr]
         conviction["bar"].setValue(snapshot.confidence)  # type: ignore[union-attr]
         gauge_score = snapshot.mtf_bullish_score if str(snapshot.side) == "BUY" else snapshot.mtf_bearish_score
         conviction["gauge"].set_score(gauge_score)  # type: ignore[union-attr]
+        conviction["detail"].setText(
+            f"Alignment: {snapshot.mtf_alignment} | Entry: {snapshot.entry_timing} | "
+            f"5m core: {snapshot.bullish_score}/{snapshot.bearish_score} | {_plan_status(snapshot)}"
+        )  # type: ignore[union-attr]
         evidence["positive"].setText("+ " + ("\n+ ".join(snapshot.bullish_reasons[:3]) or "No bullish evidence"))  # type: ignore[union-attr]
         evidence["negative"].setText("- " + ("\n- ".join(snapshot.bearish_reasons[:3]) or "No bearish evidence"))  # type: ignore[union-attr]
         caution = ("CAUTION: " + snapshot.conflicts[0]) if snapshot.conflicts else ""
@@ -592,7 +594,7 @@ class MainWindow(QMainWindow):
             return
         quote = self._quotes.get("NSE:NIFTY 50" if underlying == "NIFTY" else "BSE:SENSEX")
         analyses = self._analyses.get(underlying, {})
-        analysis = analyses.get(60)
+        analysis = analyses.get(300)
         chain = self._chains.get(underlying)
         conviction = self._convictions.get(underlying)
         if quote is not None:
@@ -605,12 +607,10 @@ class MainWindow(QMainWindow):
             view["option"].setText(_option_summary_html(chain))
         if conviction is not None:
             matrix_bull, matrix_bear, matrix_names = _matrix_state_counts(analysis, chain)
-            view["score"].setText(
-                f"{conviction.grade} | {conviction.side} | MTF Bull {conviction.mtf_bullish_score} / Bear {conviction.mtf_bearish_score}"
-            )
+            view["score"].setText(_conviction_box_html(conviction))
             view["score_meta"].setText(
-                f"Confidence {conviction.confidence}% | {conviction.mtf_alignment} | "
-                f"Entry timing: {conviction.entry_timing} | 1m core: {conviction.bullish_score}/{conviction.bearish_score}"
+                f"5m core score: Bull {conviction.bullish_score} / Bear {conviction.bearish_score}. "
+                "The core is an audit layer; the MTF gate controls paper-plan eligibility."
             )
             view["reasons"].setText(_reason_html(conviction, matrix_bear, matrix_names))
             plan_text = _plan_html(conviction)
@@ -622,7 +622,7 @@ class MainWindow(QMainWindow):
         self, tables: dict[str, QTableWidget], analyses: dict[int, IndicatorSnapshot], chain: OptionChainSnapshot | None
     ) -> None:
         """Render every indicator row across all requested timeframes."""
-        primary = analyses.get(60) or next(iter(analyses.values()))
+        primary = analyses.get(300) or next(iter(analyses.values()))
         for category, table in tables.items():
             readings = [reading for reading in primary.readings if reading.category == category]
             overrides = _option_indicator_overrides(chain) if category == "Options & Flow" and chain is not None else {}
@@ -695,6 +695,34 @@ def _price_or_dash(value: float | None) -> str:
 
 def _analysis_summary(analysis: IndicatorSnapshot) -> str:
     return f"{analysis.regime} | VWAP {_number(analysis.vwap)} | RSI {_number(analysis.rsi, 0)}"
+
+
+def _decision_direction(snapshot: ConvictionSnapshot) -> str:
+    if snapshot.side is Side.BUY:
+        return "BUY CALL"
+    if snapshot.side is Side.SELL:
+        return "BUY PUT"
+    return "WAIT"
+
+
+def _plan_status(snapshot: ConvictionSnapshot) -> str:
+    return "Paper plan allowed" if snapshot.plan is not None else "Paper plan blocked / waiting"
+
+
+def _conviction_box_html(snapshot: ConvictionSnapshot) -> str:
+    """Fast-scan multi-timeframe summary used on the NIFTY/SENSEX workspaces."""
+    mtf_score = max(snapshot.mtf_bullish_score, snapshot.mtf_bearish_score)
+    conflict = snapshot.conflicts[0] if snapshot.conflicts else "None"
+    conflict_color = "#fda4af" if snapshot.conflicts else "#67e8a5"
+    action = _decision_direction(snapshot)
+    decision_color = "#67e8a5" if snapshot.side is not Side.NEUTRAL else "#facc15"
+    return (
+        f"<span style='color:#d8b4fe; font-size:17px; font-weight:900'>MTF CONVICTION: {mtf_score} / 100</span><br>"
+        f"<span>Alignment: <b>{snapshot.mtf_alignment}</b></span><br>"
+        f"<span>Entry timing: <b>{snapshot.entry_timing}</b></span><br>"
+        f"<span>Decision: <b style='color:{decision_color}'>{snapshot.grade} | {action} | {_plan_status(snapshot)}</b></span><br>"
+        f"<span>Conflict: <b style='color:{conflict_color}'>{conflict}</b></span>"
+    )
 
 
 def _indicator_html(analysis: IndicatorSnapshot) -> str:
@@ -896,6 +924,7 @@ QLabel#panelTitle { color: #f2f6fb; font-size: 12px; font-weight: 900; }
 QLabel#quoteValue, QLabel#workspaceQuote { color: #f8fafc; font-size: 25px; font-weight: 900; }
 QLabel#quoteState { color: #52d8ff; font-size: 10px; font-weight: 800; }
 QLabel#convictionHeadline, QLabel#workspaceScore { color: #4ade80; font-size: 20px; font-weight: 900; }
+QLabel#convictionBox { color: #dce8f6; font-size: 12px; font-weight: 700; padding: 2px 0; }
 QLabel#scoreText { color: #dce8f6; font-size: 11px; font-weight: 800; }
 QLabel#workspaceReasons, QLabel#workspacePlan, QLabel#chainSummary { color: #dce8f6; font-size: 12px; }
 QProgressBar { height: 7px; border: 0; border-radius: 3px; background: #142942; }

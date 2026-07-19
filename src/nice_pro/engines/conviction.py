@@ -126,7 +126,7 @@ class ConvictionEngine:
             confidence = mtf.confidence
             conflicts.extend(mtf.conflicts)
             if side is not core_side and core_side is not Side.NEUTRAL:
-                conflicts.append("1m core evidence conflicts with the multi-timeframe trade gate")
+                conflicts.append("5m core evidence does not pass the multi-timeframe trade gate")
             grade = _mtf_grade(side, mtf, core_side, len(conflicts))
 
         plan, rejection = self._build_plan(side, grade, chain)
@@ -150,6 +150,7 @@ class ConvictionEngine:
             mtf_alignment=alignment,
             entry_timing=entry_timing,
             timeframe_signals=timeframe_signals,
+            core_timeframe_seconds=300,
         )
 
     def _build_plan(

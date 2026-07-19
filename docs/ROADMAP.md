@@ -58,7 +58,7 @@
 - Historical one-minute warm-up resampled for higher timeframes
 - 100-indicator matrix renders each indicator against its own timeframe column
 - Timeframe-specific regimes are visible in the NIFTY and SENSEX workspaces
-- Existing paper-plan score explicitly labelled as the one-minute core pending multi-timeframe validation
+- Existing paper-plan score explicitly labelled as a provisional core pending multi-timeframe validation
 
 ## Completed — Milestone 9: Multi-timeframe trade-plan gate
 
@@ -66,7 +66,7 @@
 - 1m and 5m must agree on direction; an opposing 15m, 30m or 1h signal blocks the plan.
 - 10s and 30s are explicitly limited to entry timing, not directional reversal.
 - Dashboard evidence lists every timeframe decision, alignment state and execution-timing state.
-- The legacy 1m core score remains visible only for auditability.
+- The 5m core score remains visible only for auditability.
 
 ## Next — Milestone 10: Paper trading, journal, and reports
 
