@@ -412,19 +412,24 @@ class MainWindow(QMainWindow):
         details = QVBoxLayout()
         headline = QLabel("WAIT")
         headline.setObjectName("convictionHeadline")
-        score = QLabel("Confidence -- | Bull -- / Bear --")
-        score.setObjectName("scoreText")
+        score = QLabel("MTF CONVICTION\n-- / 100")
+        score.setObjectName("mtfScoreBadge")
+        score.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        timeframe_strip = QLabel("10s •  30s •  1m •  5m •  15m •  30m •  1h •")
+        timeframe_strip.setObjectName("timeframeStrip")
+        timeframe_strip.setTextFormat(Qt.TextFormat.RichText)
         bar = QProgressBar()
         bar.setRange(0, 100)
         bar.setTextVisible(False)
         detail = self._muted("Waiting for aligned market and option evidence")
         details.addWidget(headline)
         details.addWidget(score)
+        details.addWidget(timeframe_strip)
         details.addWidget(bar)
         details.addWidget(detail)
         content.addLayout(details, 1)
         layout.addLayout(content)
-        return {"panel": panel, "headline": headline, "score": score, "bar": bar, "detail": detail, "gauge": gauge}
+        return {"panel": panel, "headline": headline, "score": score, "timeframes": timeframe_strip, "bar": bar, "detail": detail, "gauge": gauge}
 
     def _evidence_card(self, title: str) -> dict[str, object]:
         panel, layout = self._panel(title, "amber")
@@ -558,14 +563,15 @@ class MainWindow(QMainWindow):
             self._analyses.get(snapshot.underlying, {}).get(60), self._chains.get(snapshot.underlying)
         )
         conviction["score"].setText(
-            f"MTF CONVICTION: {max(snapshot.mtf_bullish_score, snapshot.mtf_bearish_score)} / 100 | "
-            f"Bull {snapshot.mtf_bullish_score} / Bear {snapshot.mtf_bearish_score}"
+            "MTF CONVICTION<br>"
+            f"{max(snapshot.mtf_bullish_score, snapshot.mtf_bearish_score)} / 100"
         )  # type: ignore[union-attr]
+        conviction["timeframes"].setText(_timeframe_strip_html(snapshot))  # type: ignore[union-attr]
         conviction["bar"].setValue(snapshot.confidence)  # type: ignore[union-attr]
         gauge_score = snapshot.mtf_bullish_score if str(snapshot.side) == "BUY" else snapshot.mtf_bearish_score
         conviction["gauge"].set_score(gauge_score)  # type: ignore[union-attr]
         conviction["detail"].setText(
-            f"Alignment: {snapshot.mtf_alignment} | Entry: {snapshot.entry_timing} | "
+            f"{snapshot.mtf_alignment} | Entry: {snapshot.entry_timing} | "
             f"5m core: {snapshot.bullish_score}/{snapshot.bearish_score} | {_plan_status(snapshot)}"
         )  # type: ignore[union-attr]
         evidence["positive"].setText("+ " + ("\n+ ".join(snapshot.bullish_reasons[:3]) or "No bullish evidence"))  # type: ignore[union-attr]
@@ -709,6 +715,22 @@ def _plan_status(snapshot: ConvictionSnapshot) -> str:
     return "Paper plan allowed" if snapshot.plan is not None else "Paper plan blocked / waiting"
 
 
+def _timeframe_strip_html(snapshot: ConvictionSnapshot) -> str:
+    """One compact, colour-coded view of every timeframe direction."""
+    if not snapshot.timeframe_signals:
+        return "<span style='color:#94a3b8'>10s •  30s •  1m •  5m •  15m •  30m •  1h •</span>"
+    parts: list[str] = []
+    for signal in snapshot.timeframe_signals:
+        if signal.side is Side.BUY:
+            arrow, color = "↑", "#4ade80"
+        elif signal.side is Side.SELL:
+            arrow, color = "↓", "#fb7185"
+        else:
+            arrow, color = "•", "#94a3b8"
+        parts.append(f"<span style='color:{color}; font-weight:900'>{signal.label} {arrow}</span>")
+    return "&nbsp;&nbsp;".join(parts)
+
+
 def _conviction_box_html(snapshot: ConvictionSnapshot) -> str:
     """Fast-scan multi-timeframe summary used on the NIFTY/SENSEX workspaces."""
     mtf_score = max(snapshot.mtf_bullish_score, snapshot.mtf_bearish_score)
@@ -718,6 +740,7 @@ def _conviction_box_html(snapshot: ConvictionSnapshot) -> str:
     decision_color = "#67e8a5" if snapshot.side is not Side.NEUTRAL else "#facc15"
     return (
         f"<span style='color:#d8b4fe; font-size:17px; font-weight:900'>MTF CONVICTION: {mtf_score} / 100</span><br>"
+        f"<span style='font-size:12px'>{_timeframe_strip_html(snapshot)}</span><br>"
         f"<span>Alignment: <b>{snapshot.mtf_alignment}</b></span><br>"
         f"<span>Entry timing: <b>{snapshot.entry_timing}</b></span><br>"
         f"<span>Decision: <b style='color:{decision_color}'>{snapshot.grade} | {action} | {_plan_status(snapshot)}</b></span><br>"
@@ -926,6 +949,8 @@ QLabel#quoteState { color: #52d8ff; font-size: 10px; font-weight: 800; }
 QLabel#convictionHeadline, QLabel#workspaceScore { color: #4ade80; font-size: 20px; font-weight: 900; }
 QLabel#convictionBox { color: #dce8f6; font-size: 12px; font-weight: 700; padding: 2px 0; }
 QLabel#scoreText { color: #dce8f6; font-size: 11px; font-weight: 800; }
+QLabel#mtfScoreBadge { background: #102b46; color: #d8b4fe; border: 1px solid #6d42a3; border-radius: 5px; padding: 3px 10px; font-size: 12px; font-weight: 900; }
+QLabel#timeframeStrip { color: #dce8f6; font-size: 10px; font-weight: 800; padding: 1px 0; }
 QLabel#workspaceReasons, QLabel#workspacePlan, QLabel#chainSummary { color: #dce8f6; font-size: 12px; }
 QProgressBar { height: 7px; border: 0; border-radius: 3px; background: #142942; }
 QProgressBar::chunk { border-radius: 3px; background: qlineargradient(x1:0, x2:1, stop:0 #f59e0b, stop:0.55 #b9d43e, stop:1 #22c55e); }
