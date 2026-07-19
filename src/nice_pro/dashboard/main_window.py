@@ -32,6 +32,7 @@ from nice_pro.models.market import (
     OptionMetric,
     OptionType,
     Quote,
+    Side,
 )
 
 if TYPE_CHECKING:
@@ -558,9 +559,12 @@ class MainWindow(QMainWindow):
         matrix_bull, matrix_bear, matrix_names = _matrix_state_counts(
             self._analyses.get(snapshot.underlying, {}).get(60), self._chains.get(snapshot.underlying)
         )
-        conviction["score"].setText(f"Core (1m): Bull {snapshot.bullish_score} / Bear {snapshot.bearish_score} | Matrix: Bull {matrix_bull} / Bear {matrix_bear}")  # type: ignore[union-attr]
+        conviction["score"].setText(
+            f"MTF: Bull {snapshot.mtf_bullish_score} / Bear {snapshot.mtf_bearish_score} | "
+            f"{snapshot.mtf_alignment} | Core 1m: Bull {snapshot.bullish_score} / Bear {snapshot.bearish_score}"
+        )  # type: ignore[union-attr]
         conviction["bar"].setValue(snapshot.confidence)  # type: ignore[union-attr]
-        gauge_score = snapshot.bullish_score if str(snapshot.side) == "BUY" else snapshot.bearish_score
+        gauge_score = snapshot.mtf_bullish_score if str(snapshot.side) == "BUY" else snapshot.mtf_bearish_score
         conviction["gauge"].set_score(gauge_score)  # type: ignore[union-attr]
         evidence["positive"].setText("+ " + ("\n+ ".join(snapshot.bullish_reasons[:3]) or "No bullish evidence"))  # type: ignore[union-attr]
         evidence["negative"].setText("- " + ("\n- ".join(snapshot.bearish_reasons[:3]) or "No bearish evidence"))  # type: ignore[union-attr]
@@ -601,8 +605,13 @@ class MainWindow(QMainWindow):
             view["option"].setText(_option_summary_html(chain))
         if conviction is not None:
             matrix_bull, matrix_bear, matrix_names = _matrix_state_counts(analysis, chain)
-            view["score"].setText(f"{conviction.grade} | {conviction.side} | 1m Core Bull {conviction.bullish_score} / Bear {conviction.bearish_score}")
-            view["score_meta"].setText(f"1m core confidence {conviction.confidence}% | Matrix: Bull {matrix_bull} / Bear {matrix_bear}")
+            view["score"].setText(
+                f"{conviction.grade} | {conviction.side} | MTF Bull {conviction.mtf_bullish_score} / Bear {conviction.mtf_bearish_score}"
+            )
+            view["score_meta"].setText(
+                f"Confidence {conviction.confidence}% | {conviction.mtf_alignment} | "
+                f"Entry timing: {conviction.entry_timing} | 1m core: {conviction.bullish_score}/{conviction.bearish_score}"
+            )
             view["reasons"].setText(_reason_html(conviction, matrix_bear, matrix_names))
             plan_text = _plan_html(conviction)
             view["plan"].setText(plan_text)
@@ -719,7 +728,25 @@ def _reason_html(snapshot: ConvictionSnapshot, matrix_bear_count: int = 0, matri
     matrix_watch = ""
     if matrix_bear_count:
         matrix_watch = f"<br><br><b style='color:#facc15'>MATRIX WATCH</b><br><span style='color:#facc15'>{matrix_bear_count} bearish readings not included as core-score votes: {', '.join(matrix_names[:5])}</span>"
-    return f"<b style='color:#67e8a5'>BULLISH</b><br>{bulls}<br><br><b style='color:#fda4af'>BEARISH</b><br>{bears}" + (f"<br><br><b style='color:#facc15'>CAUTION</b><br>{cautions}" if cautions else "") + matrix_watch
+    timeframe = ""
+    if snapshot.timeframe_signals:
+        signal_lines = "<br>".join(
+            f"<span style='color:{_side_color(signal.side)}'>{signal.label}: {signal.side} ({signal.weight}%) — {signal.reason}</span>"
+            for signal in snapshot.timeframe_signals
+        )
+        timeframe = (
+            "<br><br><b style='color:#c4b5fd'>MULTI-TIMEFRAME GATE</b><br>"
+            f"<span style='color:#dce8f6'>Alignment: {snapshot.mtf_alignment} | Entry: {snapshot.entry_timing}</span><br>{signal_lines}"
+        )
+    return f"<b style='color:#67e8a5'>BULLISH</b><br>{bulls}<br><br><b style='color:#fda4af'>BEARISH</b><br>{bears}" + (f"<br><br><b style='color:#facc15'>CAUTION</b><br>{cautions}" if cautions else "") + timeframe + matrix_watch
+
+
+def _side_color(side: Side) -> str:
+    if side is Side.BUY:
+        return "#67e8a5"
+    if side is Side.SELL:
+        return "#fda4af"
+    return "#facc15"
 
 
 def _matrix_state_counts(
@@ -773,7 +800,11 @@ def _timeframe_summary(analyses: dict[int, IndicatorSnapshot]) -> str:
 
 def _plan_html(snapshot: ConvictionSnapshot) -> str:
     if snapshot.plan is None:
-        return "<b style='color:#d8b4fe'>NO PAPER SETUP</b><br><br>Requires A/A+ grade, an ATM quote, and risk inside the configured maximum loss per lot."
+        return (
+            "<b style='color:#d8b4fe'>NO PAPER SETUP</b><br><br>"
+            f"MTF gate: <b>{snapshot.mtf_alignment}</b> | Entry timing: <b>{snapshot.entry_timing}</b><br>"
+            "Requires 1m/5m alignment, no opposing higher timeframe, A/A+ grade, an ATM quote, and risk inside the configured maximum loss per lot."
+        )
     plan = snapshot.plan
     return f"<b style='color:#d8b4fe'>PAPER ONLY | {plan.option_symbol}</b><br><br>Entry: <b>{plan.entry:.2f}</b><br>Stop loss: <b>{plan.stop_loss:.2f}</b><br>Target 1: <b>{plan.target_1:.2f}</b><br>Target 2: <b>{plan.target_2:.2f}</b><br>Maximum loss / lot: <b>Rs. {plan.max_loss_per_lot:,.0f}</b><br>Lot size: <b>{plan.lot_size}</b><br><br><span style='color:#facc15'>No order is submitted.</span>"
 

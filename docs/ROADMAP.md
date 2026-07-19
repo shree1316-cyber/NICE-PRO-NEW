@@ -60,7 +60,15 @@
 - Timeframe-specific regimes are visible in the NIFTY and SENSEX workspaces
 - Existing paper-plan score explicitly labelled as the one-minute core pending multi-timeframe validation
 
-## Next — Milestone 9: Paper trading, journal, and reports
+## Completed — Milestone 9: Multi-timeframe trade-plan gate
+
+- The paper-plan score now uses 10s, 30s, 1m, 5m, 15m, 30m and 1h observations with disclosed weights.
+- 1m and 5m must agree on direction; an opposing 15m, 30m or 1h signal blocks the plan.
+- 10s and 30s are explicitly limited to entry timing, not directional reversal.
+- Dashboard evidence lists every timeframe decision, alignment state and execution-timing state.
+- The legacy 1m core score remains visible only for auditability.
+
+## Next — Milestone 10: Paper trading, journal, and reports
 
 - Paper positions and stop/target lifecycle simulation
 - Trade journal with evidence captured at entry

@@ -109,6 +109,25 @@ class ConvictionSnapshot:
     bearish_reasons: tuple[str, ...] = ()
     conflicts: tuple[str, ...] = ()
     plan: TradePlan | None = None
+    # Multi-timeframe fields are kept separate from the compact 1-minute
+    # evidence score.  This prevents a large number of correlated readings
+    # from being silently added together as if they were independent votes.
+    mtf_bullish_score: int = 0
+    mtf_bearish_score: int = 0
+    mtf_alignment: str = "CORE ONLY"
+    entry_timing: str = "NOT ASSESSED"
+    timeframe_signals: tuple["TimeframeSignal", ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class TimeframeSignal:
+    """One transparent directional observation used by the MTF trade gate."""
+
+    timeframe_seconds: int
+    label: str
+    side: Side
+    weight: int
+    reason: str
 
 
 @dataclass(frozen=True, slots=True)

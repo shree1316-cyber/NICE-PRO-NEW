@@ -34,7 +34,7 @@ class Application:
         self.conviction = ConvictionEngine()
         self.alerts = QualityAlertEngine()
         self.kite = KiteService(settings)
-        self._analysis_by_underlying: dict[str, IndicatorSnapshot] = {}
+        self._analysis_by_underlying: dict[str, dict[int, IndicatorSnapshot]] = {}
         self._options_by_underlying: dict[str, OptionChainSnapshot] = {}
         self._snapshot_listeners: list[Callable[[MarketSnapshot], None]] = []
         self._analysis_listeners: list[Callable[[IndicatorSnapshot], None]] = []
@@ -139,14 +139,12 @@ class Application:
             symbol, self.history.for_symbol(symbol, timeframe_seconds), timeframe_seconds
         )
         underlying = "NIFTY" if "NIFTY" in symbol else "SENSEX"
-        # The one-minute model remains the paper-plan decision source until
-        # multi-timeframe weights are validated in backtests.
-        if timeframe_seconds == 60:
-            self._analysis_by_underlying[underlying] = snapshot
+        self._analysis_by_underlying.setdefault(underlying, {})[timeframe_seconds] = snapshot
         for listener in tuple(self._analysis_listeners):
             listener(snapshot)
-        if timeframe_seconds == 60:
-            self._evaluate_conviction(underlying)
+        # Re-assess whenever a timeframe closes.  The engine requires 1m and
+        # 5m alignment before it can create a paper plan.
+        self._evaluate_conviction(underlying)
 
     def _publish_option(self, snapshot: OptionChainSnapshot) -> None:
         self._options_by_underlying[snapshot.underlying] = snapshot
@@ -155,11 +153,12 @@ class Application:
         self._evaluate_conviction(snapshot.underlying)
 
     def _evaluate_conviction(self, underlying: str) -> None:
-        analysis = self._analysis_by_underlying.get(underlying)
+        analyses = self._analysis_by_underlying.get(underlying, {})
+        analysis = analyses.get(60)
         options = self._options_by_underlying.get(underlying)
         if analysis is None or options is None:
             return
-        snapshot = self.conviction.evaluate(analysis, options)
+        snapshot = self.conviction.evaluate(analysis, options, analyses)
         for listener in tuple(self._conviction_listeners):
             listener(snapshot)
         if self.alerts.should_alert(snapshot):
