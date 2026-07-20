@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QTabWidget,
@@ -137,13 +138,13 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._header())
         layout.addWidget(self._navigation())
         self._pages = QStackedWidget()
-        self._pages.addWidget(self._dashboard_page())
-        self._pages.addWidget(self._analysis_page("NIFTY"))
-        self._pages.addWidget(self._analysis_page("SENSEX"))
-        self._pages.addWidget(self._options_page())
-        self._pages.addWidget(self._paper_page())
-        self._pages.addWidget(self._placeholder_page("JOURNAL", "Journal and annotated review arrive in the next research milestone."))
-        self._pages.addWidget(self._placeholder_page("REPORTS", "Performance reports are scheduled after paper-trade data is collected."))
+        self._pages.addWidget(self._scrollable_page(self._dashboard_page()))
+        self._pages.addWidget(self._scrollable_page(self._analysis_page("NIFTY")))
+        self._pages.addWidget(self._scrollable_page(self._analysis_page("SENSEX")))
+        self._pages.addWidget(self._scrollable_page(self._options_page()))
+        self._pages.addWidget(self._scrollable_page(self._paper_page()))
+        self._pages.addWidget(self._scrollable_page(self._placeholder_page("JOURNAL", "Journal and annotated review arrive in the next research milestone.")))
+        self._pages.addWidget(self._scrollable_page(self._placeholder_page("REPORTS", "Performance reports are scheduled after paper-trade data is collected.")))
         layout.addWidget(self._pages, 1)
         layout.addWidget(self._footer())
         self.setCentralWidget(root)
@@ -176,6 +177,19 @@ class MainWindow(QMainWindow):
         right.addWidget(self._clock_label, alignment=Qt.AlignmentFlag.AlignRight)
         layout.addLayout(right)
         return header
+
+    @staticmethod
+    def _scrollable_page(content: QWidget) -> QScrollArea:
+        """Keep every workspace reachable at smaller window sizes or with long live data."""
+        scroll = QScrollArea()
+        scroll.setObjectName("pageScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        content.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        scroll.setWidget(content)
+        return scroll
 
     def _navigation(self) -> QFrame:
         nav = QFrame()
@@ -1116,6 +1130,14 @@ QLabel#connectionBadge { color: #facc15; font-size: 11px; font-weight: 900; }
 QLabel#connectionBadge[connected="true"] { color: #4ade80; }
 QLabel#clock { color: #cbd5e1; font-size: 11px; }
 QFrame#navigation, QFrame#footer { background: #050d17; border: 1px solid #173657; border-radius: 8px; }
+QScrollArea#pageScroll { background: #000000; border: none; }
+QScrollArea#pageScroll > QWidget > QWidget { background: #000000; }
+QScrollBar:vertical { background: #050d17; width: 10px; margin: 2px; }
+QScrollBar::handle:vertical { background: #1c5b83; min-height: 28px; border-radius: 5px; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar:horizontal { background: #050d17; height: 10px; margin: 2px; }
+QScrollBar::handle:horizontal { background: #1c5b83; min-width: 28px; border-radius: 5px; }
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
 QPushButton#navButton { background: transparent; color: #8ea4be; border: none; border-radius: 5px; padding: 7px 11px; font-size: 11px; font-weight: 800; }
 QPushButton#navButton:hover { color: #d7efff; background: #0b2944; }
 QPushButton#navButton[active="true"] { color: #38bdf8; background: #082940; border-bottom: 2px solid #38bdf8; }
