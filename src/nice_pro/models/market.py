@@ -113,6 +113,22 @@ class TradePlan:
 
 
 @dataclass(frozen=True, slots=True)
+class OptionHeroSnapshot:
+    """Paper-only conviction derived solely from the nearest-expiry option chain."""
+
+    underlying: str
+    calculated_at: datetime
+    side: Side
+    bullish_score: int
+    bearish_score: int
+    confidence: int
+    grade: TradeGrade
+    reasons: tuple[str, ...] = ()
+    conflicts: tuple[str, ...] = ()
+    plan: TradePlan | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ConvictionSnapshot:
     underlying: str
     calculated_at: datetime

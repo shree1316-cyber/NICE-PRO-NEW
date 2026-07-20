@@ -30,6 +30,7 @@ from nice_pro.models.market import (
     IndicatorSnapshot,
     MarketSnapshot,
     OptionChainSnapshot,
+    OptionHeroSnapshot,
     OptionMetric,
     OptionType,
     Quote,
@@ -44,6 +45,7 @@ class DashboardSignals(QObject):
     snapshot = Signal(object)
     analysis = Signal(object)
     options = Signal(object)
+    option_hero = Signal(object)
     conviction = Signal(object)
     status = Signal(str)
 
@@ -92,20 +94,24 @@ class MainWindow(QMainWindow):
         self._analyses: dict[str, dict[int, IndicatorSnapshot]] = {"NIFTY": {}, "SENSEX": {}}
         self._rendered_matrix_versions: dict[str, tuple[tuple[int, object], ...]] = {"NIFTY": (), "SENSEX": ()}
         self._chains: dict[str, OptionChainSnapshot] = {}
+        self._option_heroes: dict[str, OptionHeroSnapshot] = {}
         self._convictions: dict[str, ConvictionSnapshot] = {}
         self._kite_connected = False
         self._nav_buttons: list[QPushButton] = []
         self._analysis_views: dict[str, dict[str, object]] = {}
         self._option_tables: dict[str, QTableWidget] = {}
         self._option_summaries: dict[str, QLabel] = {}
+        self._option_hero_cards: dict[str, QLabel] = {}
         self._signals.snapshot.connect(self.update_snapshot)
         self._signals.analysis.connect(self.update_analysis)
         self._signals.options.connect(self.update_options)
+        self._signals.option_hero.connect(self.update_option_hero)
         self._signals.conviction.connect(self.update_conviction)
         self._signals.status.connect(self.update_status)
         application.add_snapshot_listener(self._signals.snapshot.emit)
         application.add_analysis_listener(self._signals.analysis.emit)
         application.add_option_listener(self._signals.options.emit)
+        application.add_option_hero_listener(self._signals.option_hero.emit)
         application.add_conviction_listener(self._signals.conviction.emit)
         application.add_status_listener(self._signals.status.emit)
         self.setWindowTitle("NICE-PRO | Intraday Conviction Engine")
@@ -273,9 +279,21 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
+        header_row = QHBoxLayout()
         heading, heading_layout = self._panel("LIVE OPTION CHAIN — COMPLETE NEAREST EXPIRY", "purple")
         heading_layout.addWidget(self._muted("Live LTP, OI, session OI delta, model IV and premium velocity for every subscribed CE/PE strike in the nearest expiry. Later expiries are separate chains; no order is submitted."))
-        layout.addWidget(heading)
+        header_row.addWidget(heading, 3)
+        hero_panel, hero_layout = self._panel("FULL-CHAIN HERO CONVICTION — PAPER ONLY", "green")
+        hero_row = QHBoxLayout()
+        for underlying in ("NIFTY", "SENSEX"):
+            hero = QLabel(f"{underlying}: waiting for full-chain evidence")
+            hero.setObjectName("optionHero")
+            hero.setWordWrap(True)
+            hero_row.addWidget(hero)
+            self._option_hero_cards[underlying] = hero
+        hero_layout.addLayout(hero_row)
+        header_row.addWidget(hero_panel, 4)
+        layout.addLayout(header_row)
         tabs = QTabWidget()
         tabs.setObjectName("chainTabs")
         for underlying in ("NIFTY", "SENSEX"):
@@ -555,6 +573,12 @@ class MainWindow(QMainWindow):
         self._refresh_option_table(chain)
         self._refresh_analysis_view(chain.underlying)
 
+    def update_option_hero(self, hero: OptionHeroSnapshot) -> None:
+        self._option_heroes[hero.underlying] = hero
+        card = self._option_hero_cards.get(hero.underlying)
+        if card is not None:
+            card.setText(_option_hero_html(hero))
+
     def update_conviction(self, snapshot: ConvictionSnapshot) -> None:
         self._convictions[snapshot.underlying] = snapshot
         conviction = self._nifty_conviction if snapshot.underlying == "NIFTY" else self._sensex_conviction
@@ -789,6 +813,29 @@ def _option_summary_html(chain: OptionChainSnapshot) -> str:
     ))
 
 
+def _option_hero_html(hero: OptionHeroSnapshot) -> str:
+    """Compact paper-only chain conviction card for the Options workspace."""
+    score = max(hero.bullish_score, hero.bearish_score)
+    color = "#67e8a5" if hero.side is Side.BUY else "#fda4af" if hero.side is Side.SELL else "#facc15"
+    action = "BUY CALL" if hero.side is Side.BUY else "BUY PUT" if hero.side is Side.SELL else "WAIT"
+    evidence = "<br>".join(hero.reasons[:2]) or "Waiting for sufficient chain evidence"
+    if hero.plan is None:
+        plan = "Paper setup blocked / waiting"
+    else:
+        plan = (
+            f"{hero.plan.option_symbol}<br>"
+            f"LTP/Entry {hero.plan.entry:.2f} | SL {hero.plan.stop_loss:.2f}<br>"
+            f"T1 {hero.plan.target_1:.2f} | T2 {hero.plan.target_2:.2f} | Loss/lot ₹{hero.plan.max_loss_per_lot:,.0f}"
+        )
+    return (
+        f"<b>{hero.underlying}</b><br>"
+        f"<span style='color:{color}; font-size:15px; font-weight:900'>{hero.grade} | {action} | {score}/100</span><br>"
+        f"<span style='color:#dce8f6'>Bull {hero.bullish_score} / Bear {hero.bearish_score} | Confidence {hero.confidence}%</span><br>"
+        f"<span style='color:#a7f3d0'>{evidence}</span><br>"
+        f"<span style='color:#f5d0fe'>{plan}</span>"
+    )
+
+
 def _reason_html(snapshot: ConvictionSnapshot, matrix_bear_count: int = 0, matrix_names: tuple[str, ...] = ()) -> str:
     bulls = "<br>".join(f"<span style='color:#67e8a5'>✓ {reason}</span>" for reason in snapshot.bullish_reasons) or "<span style='color:#94a3b8'>No bullish evidence</span>"
     bears = "<br>".join(f"<span style='color:#fda4af'>✕ {reason}</span>" for reason in snapshot.bearish_reasons) or "<span style='color:#94a3b8'>No bearish evidence</span>"
@@ -998,6 +1045,7 @@ QLabel#scoreText { color: #dce8f6; font-size: 11px; font-weight: 800; }
 QLabel#mtfScoreBadge { background: #102b46; color: #d8b4fe; border: 1px solid #6d42a3; border-radius: 5px; padding: 3px 10px; font-size: 12px; font-weight: 900; }
 QLabel#timeframeStrip { color: #dce8f6; font-size: 10px; font-weight: 800; padding: 1px 0; }
 QLabel#workspaceReasons, QLabel#workspacePlan, QLabel#chainSummary { color: #dce8f6; font-size: 12px; }
+QLabel#optionHero { color: #dce8f6; font-size: 10px; padding: 3px 7px; border-left: 1px solid #1c5b44; }
 QProgressBar { height: 7px; border: 0; border-radius: 3px; background: #142942; }
 QProgressBar::chunk { border-radius: 3px; background: qlineargradient(x1:0, x2:1, stop:0 #f59e0b, stop:0.55 #b9d43e, stop:1 #22c55e); }
 QLabel#positiveEvidence { color: #62e99a; font-size: 11px; }

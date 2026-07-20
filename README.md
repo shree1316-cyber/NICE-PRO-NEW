@@ -51,6 +51,10 @@ At startup NICE-PRO discovers and subscribes to the nearest current-month NIFTY 
 - **Estimated CVD:** live estimate using price-versus-quote classification and available trade size. Kite does not supply exchange aggressor flags, so this must not be treated as true exchange CVD.
 - **OTM Continuation:** live chain-derived estimate from the first OTM call and put premium velocities. It is not an exchange-labelled event.
 
+### Full-chain Hero Conviction
+
+The Options page includes separate NIFTY and SENSEX **Hero** boxes. They use only nearest-expiry chain inputs: PCR, total and changing call/put OI, ATM IV skew, straddle, expected move, direct bid-ask spread, top-five book imbalance, estimated CVD, and derived OTM continuation. A Hero plan is strictly paper-only and appears only for an A/A+ option-chain grade with a live ATM quote and risk inside the per-lot cap. It does not use price-action or multi-timeframe evidence and is not a trading guarantee.
+
 The timeframe weights are deliberately category-level safeguards, not a claim that all 100 indicator rows are independent votes. They must be validated with paper-trade and historical results before being relied on. NICE-PRO contains no order-placement API. A trade plan is a paper-only candidate and is never an instruction or guarantee.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ROADMAP.md](docs/ROADMAP.md).

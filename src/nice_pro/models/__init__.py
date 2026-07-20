@@ -13,10 +13,11 @@ from nice_pro.models.market import (
     TimeframeSignal,
     TradeGrade,
     TradePlan,
+    OptionHeroSnapshot,
 )
 
 __all__ = [
     "Candle", "IndicatorSnapshot", "MarketRegime", "MarketSnapshot", "OptionChainSnapshot",
     "OptionContract", "OptionMetric", "OptionType", "Quote", "Side", "ConvictionSnapshot", "TimeframeSignal",
-    "TradeGrade", "TradePlan",
+    "TradeGrade", "TradePlan", "OptionHeroSnapshot",
 ]
