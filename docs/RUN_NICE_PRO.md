@@ -57,5 +57,6 @@ Expected live result: after valid credentials and a live market are available, i
 
 - **`No module named kiteconnect` or `loguru`:** repeat the install command from step 3.
 - **Dashboard opens but has no live price:** verify the access token, trading session, subscription tokens, and Kite API entitlement.
+- **Window says “Not responding” at launch:** install the current update. NICE-PRO now starts the Kite connection in a background worker, so the desktop window remains responsive even if Kite or the network is slow. If data still does not arrive after one minute, close the app and inspect `logs/nice-pro.log`; send the final 30 lines together with the terminal output.
 - **No option-chain data:** wait for a spot quote, then check the instrument master and current expiry availability.
 - **A plan appears:** it is paper-only. NICE-PRO has no order-placement code.

@@ -60,6 +60,7 @@ class Application:
     def start(self) -> None:
         logger.info("Application started (paper trading only: {}).", self.settings.paper_trading_only)
         if self.settings.kite_configured:
+            self.publish_status("starting Kite market-data services")
             self.kite.start_stream(self.settings.subscriptions, self.process_quote, self.publish_status)
             Thread(target=self._seed_history, name="candle-history-seed", daemon=True).start()
             Thread(target=self._discover_atm_options, name="option-universe", daemon=True).start()

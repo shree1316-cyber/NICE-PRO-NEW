@@ -1,6 +1,7 @@
 """Fast-scan PySide6 workspaces for the paper-only NICE-PRO engine."""
 
 from datetime import datetime, time
+from threading import Thread
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QDateTime, QObject, Qt, QTimer, Signal
@@ -920,7 +921,22 @@ def run_dashboard(application: "Application") -> int:
     app = QApplication.instance() or QApplication([])
     window = MainWindow(application)
     window.show()
-    application.start()
+
+    def start_services() -> None:
+        """Keep network setup off Qt's UI event loop.
+
+        Kite's WebSocket handshake, reconnect behaviour, and initial REST calls
+        can stall on an unavailable network.  They must never make the desktop
+        window appear as "Not responding".
+        """
+        try:
+            application.start()
+        except Exception as error:
+            application.publish_status(f"startup error: {error}")
+
+    # Queue after the window is visible and run the potentially slow startup
+    # boundary in a worker.  GUI changes continue via Qt signals.
+    QTimer.singleShot(0, lambda: Thread(target=start_services, name="nice-pro-startup", daemon=True).start())
     return app.exec()
 
 
