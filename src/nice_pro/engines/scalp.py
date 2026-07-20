@@ -7,7 +7,6 @@ from nice_pro.models.market import (
     IndicatorSnapshot,
     MarketRegime,
     OptionChainSnapshot,
-    OptionMetric,
     OptionType,
     ScalpSnapshot,
     Side,

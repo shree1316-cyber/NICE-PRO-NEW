@@ -29,6 +29,8 @@ class CoreBacktestConfig:
     max_holding_minutes: int = 90
     entry_start: time = time(9, 30)
     entry_end: time = time(14, 45)
+    cooldown_minutes: int = 0
+    max_trades_per_day: int = 99
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,8 +115,7 @@ class CoreBacktester:
         # minute's open is the earliest executable price in this model.
         for index in range(len(candles) - 1):
             signal_bar = candles[index]
-            local_time = signal_bar.closed_at.astimezone(IST).time()
-            if signal_bar.closed_at.minute % 5 or not (self.config.entry_start <= local_time <= self.config.entry_end):
+            if signal_bar.closed_at.minute % 5:
                 continue
             analyses = self._analyses_at(signal_bar.closed_at, by_timeframe, opened)
             core = analyses.get(300)
@@ -131,13 +132,23 @@ class CoreBacktester:
         candles = tuple(sorted(minute_candles, key=lambda item: item.opened_at))
         trades: list[HistoricalTrade] = []
         blocked_until = -1
+        trades_per_day: dict[object, int] = {}
         for event in events:
             snapshot = event.snapshot
             direction_score = max(snapshot.mtf_bullish_score, snapshot.mtf_bearish_score)
-            if event.index <= blocked_until or not self._eligible(snapshot.side, snapshot.grade, direction_score):
+            local_time = candles[event.index].closed_at.astimezone(IST).time()
+            session_date = candles[event.index].closed_at.astimezone(IST).date()
+            if (
+                event.index <= blocked_until
+                or not (self.config.entry_start <= local_time <= self.config.entry_end)
+                or trades_per_day.get(session_date, 0) >= self.config.max_trades_per_day
+                or not self._eligible(snapshot.side, snapshot.grade, direction_score)
+            ):
                 continue
             trade, blocked_until = self._simulate(candles, event.index + 1, snapshot.side, event.atr, snapshot)
             trades.append(trade)
+            trades_per_day[session_date] = trades_per_day.get(session_date, 0) + 1
+            blocked_until += self.config.cooldown_minutes
         return BacktestReport(candles[0].symbol, candles[0].opened_at, candles[-1].closed_at, self.config, tuple(trades))
 
     def _analyses_at(
@@ -154,8 +165,12 @@ class CoreBacktester:
         return output
 
     def _eligible(self, side: Side, grade: TradeGrade, score: int) -> bool:
-        allowed = {TradeGrade.A_PLUS, TradeGrade.A} if self.config.minimum_grade is TradeGrade.A else {TradeGrade.A_PLUS}
-        return side is not Side.NEUTRAL and grade in allowed and score >= self.config.minimum_mtf_score
+        grade_rank = {TradeGrade.AVOID: 0, TradeGrade.C: 1, TradeGrade.B: 2, TradeGrade.A: 3, TradeGrade.A_PLUS: 4}
+        return (
+            side is not Side.NEUTRAL
+            and grade_rank[grade] >= grade_rank[self.config.minimum_grade]
+            and score >= self.config.minimum_mtf_score
+        )
 
     def _simulate(self, candles: tuple[Candle, ...], entry_index: int, side: Side, atr: float, snapshot) -> tuple[HistoricalTrade, int]:
         entry_bar = candles[entry_index]

@@ -53,6 +53,22 @@ Expected live result: after valid credentials and a live market are available, i
 .\.venv\Scripts\python.exe -m ruff check src tests
 ```
 
+## 7. Run the 308-session core optimisation
+
+This test reconstructs only the candle-based NICE-PRO core from Kite's
+one-minute historical candles. It does not claim to test the live-only Hero,
+option-chain, bid/ask-depth, CVD, or 10-second/30-second modules.
+
+```powershell
+.\.venv\Scripts\python.exe -m nice_pro.backtest.runner --from-date 2023-01-02 --to-date 2024-03-28 --underlying NIFTY --optimise
+```
+
+The resulting `*_optimisation.json` reports one **paper-forward-test candidate**
+only if it has positive average R and profit factor of at least 1.0 in both the
+70% training segment and untouched 30% test segment, with at least 50 trades in
+each. It does not change dashboard weights or place trades. Keep the candidate
+in paper mode for at least 10 trading sessions before considering any change.
+
 ## Troubleshooting
 
 - **`No module named kiteconnect` or `loguru`:** repeat the install command from step 3.
