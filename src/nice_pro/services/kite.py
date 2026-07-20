@@ -8,6 +8,7 @@ from kiteconnect import KiteConnect, KiteTicker
 from loguru import logger
 
 from nice_pro.config.settings import Settings, Subscription
+from nice_pro.engines.indicators import IST
 from nice_pro.models.market import Candle, OptionContract, OptionType, Quote
 
 TickCallback = Callable[[Quote], None]
@@ -56,8 +57,10 @@ class KiteService:
         candles: list[Candle] = []
         for row in rows:
             opened_at = row["date"]
+            # Kite historical timestamps are exchanged in India market time and
+            # are often naive datetime objects.  Attach IST rather than UTC.
             if opened_at.tzinfo is None:
-                opened_at = opened_at.replace(tzinfo=timezone.utc)
+                opened_at = opened_at.replace(tzinfo=IST)
             candles.append(
                 Candle(
                     symbol=subscription.symbol,
@@ -147,7 +150,10 @@ class KiteService:
             ws.set_mode(ws.MODE_FULL, tokens)
             status(f"connected; subscribed to {len(tokens)} instruments")
 
+        tick_error_reported = False
+
         def on_ticks(ws, ticks) -> None:  # type: ignore[no-untyped-def]
+            nonlocal tick_error_reported
             del ws
             for tick in ticks:
                 token = tick.get("instrument_token")
@@ -158,19 +164,28 @@ class KiteService:
                     continue
                 depth = tick.get("depth", {})
                 buy, sell = depth.get("buy", []), depth.get("sell", [])
-                timestamp = tick.get("exchange_timestamp") or tick.get("timestamp") or datetime.now(timezone.utc)
-                on_quote(
-                    Quote(
-                        instrument_token=token,
-                        symbol=symbol,
-                        last_price=float(last_price),
-                        received_at=timestamp,
-                        volume=tick.get("volume_traded"),
-                        bid=buy[0].get("price") if buy else None,
-                        ask=sell[0].get("price") if sell else None,
-                        open_interest=tick.get("oi"),
-                    )
+                timestamp = _normalise_kite_timestamp(
+                    tick.get("exchange_timestamp") or tick.get("timestamp")
                 )
+                try:
+                    on_quote(
+                        Quote(
+                            instrument_token=token,
+                            symbol=symbol,
+                            last_price=float(last_price),
+                            received_at=timestamp,
+                            volume=tick.get("volume_traded"),
+                            bid=buy[0].get("price") if buy else None,
+                            ask=sell[0].get("price") if sell else None,
+                            open_interest=tick.get("oi"),
+                        )
+                    )
+                except Exception:
+                    # Never let one bad tick tear down KiteTicker's reactor.
+                    logger.exception("Tick processing failed for {}", symbol)
+                    if not tick_error_reported:
+                        status("tick processing error; see logs/nice-pro.log")
+                        tick_error_reported = True
 
         ticker.on_connect = on_connect
         ticker.on_ticks = on_ticks
@@ -199,3 +214,16 @@ class KiteService:
             self._ticker.close()
             self._ticker = None
             logger.info("Kite stream stopped.")
+
+
+def _normalise_kite_timestamp(value: object | None) -> datetime:
+    """Return an aware UTC timestamp for a Kite tick.
+
+    Kite may return naive IST datetimes for exchange timestamps.  Mixing those
+    with the aware UTC fallback clock makes duration calculations fail.
+    """
+    if not isinstance(value, datetime):
+        return datetime.now(timezone.utc)
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=IST)
+    return value.astimezone(timezone.utc)

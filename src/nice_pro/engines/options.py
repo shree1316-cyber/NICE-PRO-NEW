@@ -1,7 +1,7 @@
 """Transparent intraday option-chain metrics; no trading decisions or orders."""
 
 from collections import defaultdict, deque
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 from math import erf, exp, log, sqrt
 
 from nice_pro.engines.indicators import IST
@@ -74,8 +74,16 @@ class OptionChainEngine:
 def _premium_velocity(quotes: tuple[Quote, ...]) -> float | None:
     if len(quotes) < 2:
         return None
-    elapsed = (quotes[-1].received_at - quotes[0].received_at).total_seconds()
+    # Quote timestamps should already be normalised by KiteService, but retain
+    # this guard for test data and any future data-provider integration.
+    elapsed = (_as_aware_utc(quotes[-1].received_at) - _as_aware_utc(quotes[0].received_at)).total_seconds()
     return (quotes[-1].last_price - quotes[0].last_price) / elapsed if elapsed > 0 else None
+
+
+def _as_aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=IST)
+    return value.astimezone(timezone.utc)
 
 
 def _observed_max_pain(metrics: tuple[OptionMetric, ...], strikes: list[float]) -> float | None:
@@ -120,7 +128,7 @@ def _implied_volatility(contract: OptionContract, quote: Quote, spot: float | No
     if spot is None or spot <= 0 or quote.last_price <= 0:
         return None
     expiry = datetime.combine(contract.expiry, time(15, 30), tzinfo=IST)
-    years = (expiry - quote.received_at.astimezone(IST)).total_seconds() / (365 * 24 * 60 * 60)
+    years = (expiry - _as_aware_utc(quote.received_at).astimezone(IST)).total_seconds() / (365 * 24 * 60 * 60)
     if years <= 0:
         return None
     low, high = 0.01, 5.0

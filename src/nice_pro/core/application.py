@@ -93,9 +93,15 @@ class Application:
         self.publish_status("warming up one-minute indicator history")
         for subscription in self.settings.subscriptions:
             try:
-                self.history.extend(self.kite.historical_minute_candles(subscription, lookback_days=15))
+                logger.info("History warm-up started for {}", subscription.symbol)
+                candles = self.kite.historical_minute_candles(subscription, lookback_days=15)
+                if not candles:
+                    raise RuntimeError("Kite returned no one-minute candles")
+                self.history.extend(candles)
                 for timeframe_seconds in ANALYSIS_TIMEFRAMES:
                     self._publish_analysis(subscription.symbol, timeframe_seconds)
+                logger.info("History warm-up completed for {}: {} candles", subscription.symbol, len(candles))
+                self.publish_status(f"history ready for {subscription.symbol}: {len(candles)} candles")
             except Exception as error:
                 logger.exception("History warm-up failed for {}", subscription.symbol)
                 self.publish_status(f"history warm-up failed for {subscription.symbol}: {error}")
