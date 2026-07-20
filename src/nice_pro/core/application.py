@@ -16,7 +16,7 @@ from nice_pro.engines.indicators import IndicatorEngine
 from nice_pro.engines.market_data import MarketDataEngine
 from nice_pro.engines.market_state import MarketState
 from nice_pro.engines.options import OptionChainEngine
-from nice_pro.models.market import ConvictionSnapshot, IndicatorSnapshot, MarketSnapshot, OptionChainSnapshot, Quote
+from nice_pro.models.market import Candle, ConvictionSnapshot, IndicatorSnapshot, MarketSnapshot, OptionChainSnapshot, Quote
 from nice_pro.services.kite import KiteService
 
 ANALYSIS_TIMEFRAMES = (10, 30, 60, 300, 900, 1800, 3600)
@@ -39,6 +39,9 @@ class Application:
         self._option_lock = RLock()
         self._last_option_publish: dict[str, float] = {}
         self._option_publish_interval_seconds = 0.25
+        self._futures_by_token: dict[int, str] = {}
+        self._future_symbols: dict[str, str] = {}
+        self._spot_symbols = {"NIFTY": "NSE:NIFTY 50", "SENSEX": "BSE:SENSEX"}
         self._snapshot_listeners: list[Callable[[MarketSnapshot], None]] = []
         self._analysis_listeners: list[Callable[[IndicatorSnapshot], None]] = []
         self._option_listeners: list[Callable[[OptionChainSnapshot], None]] = []
@@ -66,6 +69,7 @@ class Application:
             self.publish_status("starting Kite market-data services")
             self.kite.start_stream(self.settings.subscriptions, self.process_quote, self.publish_status)
             Thread(target=self._seed_history, name="candle-history-seed", daemon=True).start()
+            Thread(target=self._discover_futures, name="futures-volume-feed", daemon=True).start()
             Thread(target=self._discover_atm_options, name="option-universe", daemon=True).start()
         else:
             self.publish_status("Kite credentials not configured — dashboard is in offline mode")
@@ -75,6 +79,15 @@ class Application:
         logger.info("Application stopped.")
 
     def process_quote(self, quote: Quote) -> None:
+        future_underlying = self._futures_by_token.get(quote.instrument_token)
+        if future_underlying is not None:
+            # Futures remain a separate price stream.  Their completed candle
+            # volumes are overlaid onto spot-index analysis as a labelled proxy.
+            update = self.market_data.process(quote)
+            for candle in update.closed_candles:
+                self.history.append(candle)
+                self._publish_analysis(self._spot_symbols[future_underlying], candle.timeframe_seconds)
+            return
         if self.options.is_option_token(quote.instrument_token):
             chain: OptionChainSnapshot | None = None
             with self._option_lock:
@@ -118,6 +131,30 @@ class Application:
                 self.publish_status(f"history warm-up failed for {subscription.symbol}: {error}")
         self.publish_status("live quote stream active")
 
+    def _discover_futures(self) -> None:
+        """Attach current-month futures as the real exchange-volume proxy."""
+        for underlying in ("NIFTY", "SENSEX"):
+            try:
+                future = self.kite.nearest_future_subscription(underlying)
+                if future is None:
+                    self.publish_status(f"futures volume proxy unavailable for {underlying}")
+                    continue
+                self._futures_by_token[future.instrument_token] = underlying
+                self._future_symbols[underlying] = future.symbol
+                self.kite.add_subscriptions((future,))
+                self.publish_status(f"{underlying} futures-volume proxy subscribed")
+                logger.info("Futures volume proxy for {}: {}", underlying, future.symbol)
+                candles = self.kite.historical_minute_candles(future, lookback_days=15)
+                if not candles:
+                    raise RuntimeError("Kite returned no futures minute candles")
+                self.history.extend(candles)
+                for timeframe_seconds in ANALYSIS_TIMEFRAMES:
+                    self._publish_analysis(self._spot_symbols[underlying], timeframe_seconds)
+                self.publish_status(f"{underlying} futures-volume history ready: {len(candles)} candles")
+            except Exception as error:
+                logger.exception("Futures volume proxy setup failed for {}", underlying)
+                self.publish_status(f"futures volume proxy failed for {underlying}: {error}")
+
     def _discover_atm_options(self) -> None:
         for subscription in self.settings.subscriptions:
             underlying = "NIFTY" if "NIFTY" in subscription.symbol else "SENSEX"
@@ -156,10 +193,18 @@ class Application:
         return "NIFTY" if "NIFTY" in symbol else "SENSEX"
 
     def _publish_analysis(self, symbol: str, timeframe_seconds: int) -> None:
-        snapshot = self.indicators.evaluate(
-            symbol, self.history.for_symbol(symbol, timeframe_seconds), timeframe_seconds
-        )
         underlying = "NIFTY" if "NIFTY" in symbol else "SENSEX"
+        candles = self.history.for_symbol(symbol, timeframe_seconds)
+        future_symbol = self._future_symbols.get(underlying)
+        volume_source = "Spot-index candle volume"
+        if future_symbol is not None:
+            candles = _with_futures_volume(
+                candles, self.history.for_symbol(future_symbol, timeframe_seconds)
+            )
+            volume_source = f"Current-month {underlying} futures volume proxy"
+        snapshot = self.indicators.evaluate(
+            symbol, candles, timeframe_seconds, volume_source=volume_source
+        )
         self._analysis_by_underlying.setdefault(underlying, {})[timeframe_seconds] = snapshot
         for listener in tuple(self._analysis_listeners):
             listener(snapshot)
@@ -195,3 +240,24 @@ def run_desktop() -> None:
     settings = Settings.load()
     configure_logging(settings.log_level)
     run_dashboard(Application(settings))
+
+
+def _with_futures_volume(
+    spot_candles: tuple[Candle, ...], future_candles: tuple[Candle, ...]
+) -> tuple[Candle, ...]:
+    """Keep spot OHLC while using matched futures bars only for traded volume."""
+    future_volumes = {candle.opened_at: candle.volume for candle in future_candles}
+    return tuple(
+        Candle(
+            symbol=candle.symbol,
+            timeframe_seconds=candle.timeframe_seconds,
+            opened_at=candle.opened_at,
+            closed_at=candle.closed_at,
+            open=candle.open,
+            high=candle.high,
+            low=candle.low,
+            close=candle.close,
+            volume=future_volumes.get(candle.opened_at, 0),
+        )
+        for candle in spot_candles
+    )

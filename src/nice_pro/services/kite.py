@@ -118,6 +118,30 @@ class KiteService:
             )
         return contracts
 
+    def nearest_future_subscription(self, underlying: str) -> Subscription | None:
+        """Discover the nearest current-month index future from Kite's master.
+
+        The future is used only as a labelled exchange-volume proxy for the
+        related spot-index analysis.  It is never substituted for spot price.
+        """
+        exchange = "NFO" if underlying == "NIFTY" else "BFO"
+        today = date.today()
+        records = [
+            item
+            for item in self.client().instruments(exchange)
+            if item.get("name") == underlying
+            and item.get("instrument_type") == "FUT"
+            and item.get("expiry")
+            and item["expiry"] >= today
+        ]
+        if not records:
+            return None
+        contract = min(records, key=lambda item: item["expiry"])
+        return Subscription(
+            symbol=f"{exchange}:{contract['tradingsymbol']}",
+            instrument_token=int(contract["instrument_token"]),
+        )
+
     def start_stream(
         self,
         subscriptions: Sequence[Subscription],
@@ -197,8 +221,8 @@ class KiteService:
         status("connecting")
         ticker.connect(threaded=True)
 
-    def add_subscriptions(self, contracts: Sequence[OptionContract]) -> None:
-        """Dynamically subscribe option contracts after the current ATM is known."""
+    def add_subscriptions(self, contracts: Sequence[OptionContract | Subscription]) -> None:
+        """Dynamically subscribe discovered option or futures contracts."""
         if self._ticker is None:
             raise RuntimeError("Start the spot stream before adding option subscriptions.")
         with self._symbols_lock:

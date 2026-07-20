@@ -38,6 +38,10 @@ The app streams only explicitly subscribed market data. The option-chain page la
 - **15m (20%), 30m (15%), 1h (10%):** confirmation filters; a direct opposing signal blocks the plan.
 - The **5m core score** remains visible for auditability, while the MTF gate remains the final paper-plan decision layer.
 
+### Futures-volume proxy
+
+At startup NICE-PRO discovers and subscribes to the nearest current-month NIFTY and SENSEX futures. Their exchange-traded volume is overlaid on the corresponding spot-index candles solely to calculate the volume indicator category. Each volume row identifies this as a **futures-volume proxy**, never as spot-index volume.
+
 The timeframe weights are deliberately category-level safeguards, not a claim that all 100 indicator rows are independent votes. They must be validated with paper-trade and historical results before being relied on. NICE-PRO contains no order-placement API. A trade plan is a paper-only candidate and is never an instruction or guarantee.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ROADMAP.md](docs/ROADMAP.md).

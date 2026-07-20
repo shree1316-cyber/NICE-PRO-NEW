@@ -18,7 +18,11 @@ class IndicatorEngine:
     """
 
     def evaluate(
-        self, symbol: str, candles: tuple[Candle, ...], timeframe_seconds: int | None = None
+        self,
+        symbol: str,
+        candles: tuple[Candle, ...],
+        timeframe_seconds: int | None = None,
+        volume_source: str = "Spot-index candle volume",
     ) -> IndicatorSnapshot:
         actual_timeframe = timeframe_seconds or (candles[-1].timeframe_seconds if candles else 60)
         if len(candles) < 21:
@@ -55,7 +59,10 @@ class IndicatorEngine:
             opening_range_high=opening_high,
             opening_range_low=opening_low,
             reasons=tuple(reasons),
-            readings=_build_readings(candles, fast, slow, rsi, atr, vwap, relative_volume, opening_high, opening_low),
+            readings=_build_readings(
+                candles, fast, slow, rsi, atr, vwap, relative_volume,
+                opening_high, opening_low, volume_source,
+            ),
         )
 
 
@@ -172,6 +179,7 @@ def _build_readings(
     relative_volume: float | None,
     opening_high: float | None,
     opening_low: float | None,
+    volume_source: str,
 ) -> tuple[IndicatorReading, ...]:
     closes = [bar.close for bar in candles]
     highs = [bar.high for bar in candles]
@@ -296,11 +304,52 @@ def _build_readings(
         put("Volume SMA 20", volume_sma, "INFO", "20-bar volume average", 0)
         put("Volume Spike", relative_volume, "BULLISH" if relative_volume is not None and relative_volume >= 1.5 else "NEUTRAL", "Relative-volume spike check", 2, "x")
         put("OBV", obv, "BULLISH" if obv is not None and obv > 0 else "BEARISH", "On-balance volume from available candles", 0)
+        volume_reason = f"{volume_source}; not spot-index exchange volume" if "futures" in volume_source.lower() else volume_source
+        cmf = _cmf(candles, 20)
+        mfi = _mfi(candles, 14)
+        ad = _accumulation_distribution(candles)
+        pvt = _price_volume_trend(candles)
+        emv = _ease_of_movement(candles, 14)
+        force = _force_index(candles, 13)
+        chaikin = _chaikin_oscillator(candles)
+        volume_roc = _volume_roc(vols, 10)
+        vwap_basis = vols[-1] / session_volume if session_volume else None
         for name in ("CMF 20", "MFI 14", "VWAP Volume Basis", "Volume ROC", "Accumulation/Distribution", "Price Volume Trend", "Ease of Movement", "Force Index", "Chaikin Oscillator"):
             values[name] = ("—", "FEED REQUIRED", "Requires validated trade-volume or depth data; not inferred from an index quote")
     else:
         for name in (name for category, name in _CATALOG if category == "Volume"):
             values[name] = ("—", "FEED REQUIRED", "This subscription does not provide usable index-volume data")
+
+    # A futures-volume proxy lets every volume formula use genuine exchange
+    # traded volume while spot OHLC remains the analysis price source.
+    if any(bar.volume > 0 for bar in candles):
+        vols = [bar.volume for bar in candles]
+        session_volume = sum(bar.volume for bar in session)
+        volume_reason = f"{volume_source}; not spot-index exchange volume" if "futures" in volume_source.lower() else volume_source
+        cmf = _cmf(candles, 20)
+        mfi = _mfi(candles, 14)
+        ad = _accumulation_distribution(candles)
+        pvt = _price_volume_trend(candles)
+        emv = _ease_of_movement(candles, 14)
+        force = _force_index(candles, 13)
+        chaikin = _chaikin_oscillator(candles)
+        volume_roc = _volume_roc(vols, 10)
+        vwap_basis = vols[-1] / session_volume if session_volume else None
+        put("Relative Volume", relative_volume, "BULLISH" if relative_volume is not None and relative_volume >= 1.2 else "NEUTRAL", volume_reason, 2, "x")
+        put("Current Bar Volume", float(vols[-1]), "INFO", volume_reason, 0)
+        put("Session Volume", float(session_volume), "INFO", volume_reason, 0)
+        put("Volume SMA 20", _sma([float(item) for item in vols], 20), "INFO", volume_reason, 0)
+        put("Volume Spike", relative_volume, "BULLISH" if relative_volume is not None and relative_volume >= 1.5 else "NEUTRAL", volume_reason, 2, "x")
+        put("OBV", _obv(candles), "BULLISH" if _obv(candles) is not None and _obv(candles) > 0 else "BEARISH", volume_reason, 0)
+        put("CMF 20", cmf, "BULLISH" if cmf is not None and cmf > 0 else "BEARISH", volume_reason, 3)
+        put("MFI 14", mfi, "BULLISH" if mfi is not None and mfi >= 55 else "BEARISH" if mfi is not None and mfi <= 45 else "NEUTRAL", volume_reason, 1)
+        put("VWAP Volume Basis", vwap_basis, "INFO", f"Latest-bar share of session {volume_reason}", 3)
+        put("Volume ROC", volume_roc, "BULLISH" if volume_roc is not None and volume_roc > 0 else "BEARISH", volume_reason, 2, "%")
+        put("Accumulation/Distribution", ad, "BULLISH" if ad is not None and ad > 0 else "BEARISH", volume_reason, 0)
+        put("Price Volume Trend", pvt, "BULLISH" if pvt is not None and pvt > 0 else "BEARISH", volume_reason, 0)
+        put("Ease of Movement", emv, "BULLISH" if emv is not None and emv > 0 else "BEARISH", volume_reason, 4)
+        put("Force Index", force, "BULLISH" if force is not None and force > 0 else "BEARISH", volume_reason, 0)
+        put("Chaikin Oscillator", chaikin, "BULLISH" if chaikin is not None and chaikin > 0 else "BEARISH", volume_reason, 0)
 
     # Options & flow are populated by the separate option/microstructure engines.
     # Keeping the rows visible makes each missing real-time feed explicit.
@@ -406,6 +455,82 @@ def _obv(candles: tuple[Candle, ...]) -> float | None:
     for previous, current in zip(candles, candles[1:]):
         result += current.volume if current.close > previous.close else -current.volume if current.close < previous.close else 0
     return float(result)
+
+
+def _money_flow_multiplier(candle: Candle) -> float:
+    span = candle.high - candle.low
+    return ((candle.close - candle.low) - (candle.high - candle.close)) / span if span else 0.0
+
+
+def _cmf(candles: tuple[Candle, ...], period: int) -> float | None:
+    segment = candles[-period:]
+    total_volume = sum(candle.volume for candle in segment)
+    return sum(_money_flow_multiplier(candle) * candle.volume for candle in segment) / total_volume if total_volume else None
+
+
+def _mfi(candles: tuple[Candle, ...], period: int) -> float | None:
+    if len(candles) < period + 1:
+        return None
+    positive = negative = 0.0
+    for previous, current in zip(candles[-period - 1 :], candles[-period:]):
+        previous_typical = (previous.high + previous.low + previous.close) / 3
+        typical = (current.high + current.low + current.close) / 3
+        flow = typical * current.volume
+        if typical > previous_typical:
+            positive += flow
+        elif typical < previous_typical:
+            negative += flow
+    if negative == 0:
+        return 100.0 if positive else 50.0
+    return 100 - 100 / (1 + positive / negative)
+
+
+def _accumulation_distribution(candles: tuple[Candle, ...]) -> float:
+    return sum(_money_flow_multiplier(candle) * candle.volume for candle in candles)
+
+
+def _price_volume_trend(candles: tuple[Candle, ...]) -> float:
+    total = 0.0
+    for previous, current in zip(candles, candles[1:]):
+        if previous.close:
+            total += (current.close - previous.close) / previous.close * current.volume
+    return total
+
+
+def _volume_roc(volumes: list[int], period: int) -> float | None:
+    if len(volumes) <= period or not volumes[-period - 1]:
+        return None
+    return (volumes[-1] / volumes[-period - 1] - 1) * 100
+
+
+def _ease_of_movement(candles: tuple[Candle, ...], period: int) -> float | None:
+    if len(candles) < period + 1:
+        return None
+    values: list[float] = []
+    for previous, current in zip(candles[-period - 1 :], candles[-period:]):
+        span = current.high - current.low
+        if current.volume > 0 and span > 0:
+            midpoint_move = ((current.high + current.low) - (previous.high + previous.low)) / 2
+            values.append(midpoint_move * span / current.volume)
+    return sum(values) / len(values) if values else None
+
+
+def _force_index(candles: tuple[Candle, ...], period: int) -> float | None:
+    if len(candles) < 2:
+        return None
+    values = [(current.close - previous.close) * current.volume for previous, current in zip(candles, candles[1:])]
+    return _ema(values, period) if len(values) >= period else values[-1]
+
+
+def _chaikin_oscillator(candles: tuple[Candle, ...]) -> float | None:
+    if len(candles) < 10:
+        return None
+    line: list[float] = []
+    running = 0.0
+    for candle in candles:
+        running += _money_flow_multiplier(candle) * candle.volume
+        line.append(running)
+    return _ema(line, 3) - _ema(line, 10)
 
 
 def _price_state(current: float, reference: float | None) -> str:

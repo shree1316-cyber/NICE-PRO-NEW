@@ -30,6 +30,11 @@ def test_indicator_engine_identifies_aligned_uptrend() -> None:
     assert {reading.category for reading in result.readings} == {
         "Trend", "Momentum", "Volatility", "Levels", "Volume", "Options & Flow"
     }
+    assert all(
+        reading.state != "FEED REQUIRED"
+        for reading in result.readings
+        if reading.category == "Volume"
+    )
 
 
 def test_indicator_engine_preserves_requested_timeframe_while_waiting_for_tick_history() -> None:
