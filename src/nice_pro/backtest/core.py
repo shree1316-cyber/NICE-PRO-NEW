@@ -137,6 +137,7 @@ class CoreBacktester:
             if event.index <= blocked_until or not self._eligible(snapshot.side, snapshot.grade, direction_score):
                 continue
             trade, blocked_until = self._simulate(candles, event.index + 1, snapshot.side, event.atr, snapshot)
+            trades.append(trade)
         return BacktestReport(candles[0].symbol, candles[0].opened_at, candles[-1].closed_at, self.config, tuple(trades))
 
     def _analyses_at(
