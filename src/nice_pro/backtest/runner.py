@@ -59,7 +59,11 @@ def main() -> None:
     report = CoreBacktester().run(candles)
     args.output.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    base = args.output / f"{args.underlying.lower()}_core_{args.days}d_{stamp}"
+    range_name = (
+        f"{args.from_date:%Y%m%d}_{args.to_date:%Y%m%d}"
+        if using_dates else f"{args.days}d"
+    )
+    base = args.output / f"{args.underlying.lower()}_core_{range_name}_{stamp}"
     _write_report(base, report)
     print(json.dumps(report.summary(), indent=2))
     print(f"Saved report: {base}.json and {base}_trades.csv")
