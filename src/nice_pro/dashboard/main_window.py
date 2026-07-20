@@ -570,7 +570,16 @@ class MainWindow(QMainWindow):
         )  # type: ignore[union-attr]
         conviction["timeframes"].setText(_timeframe_strip_html(snapshot))  # type: ignore[union-attr]
         conviction["bar"].setValue(snapshot.confidence)  # type: ignore[union-attr]
-        gauge_score = snapshot.mtf_bullish_score if str(snapshot.side) == "BUY" else snapshot.mtf_bearish_score
+        # A blocked MTF gate is intentionally Side.NEUTRAL.  Still show the
+        # dominant evidence on the gauge; otherwise a 30/100 bullish backdrop
+        # is misleadingly rendered as zero merely because it is not tradable.
+        gauge_score = (
+            snapshot.mtf_bullish_score
+            if snapshot.side is Side.BUY
+            else snapshot.mtf_bearish_score
+            if snapshot.side is Side.SELL
+            else max(snapshot.mtf_bullish_score, snapshot.mtf_bearish_score)
+        )
         conviction["gauge"].set_score(gauge_score)  # type: ignore[union-attr]
         conviction["detail"].setText(
             f"{snapshot.mtf_alignment} | Entry: {snapshot.entry_timing} | "
