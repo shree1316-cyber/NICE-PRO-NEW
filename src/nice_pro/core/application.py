@@ -1,8 +1,8 @@
 """Application composition root."""
 
 from collections.abc import Callable
-from threading import Thread
-from time import sleep
+from threading import RLock, Thread
+from time import monotonic, sleep
 
 from loguru import logger
 
@@ -36,6 +36,9 @@ class Application:
         self.kite = KiteService(settings)
         self._analysis_by_underlying: dict[str, dict[int, IndicatorSnapshot]] = {}
         self._options_by_underlying: dict[str, OptionChainSnapshot] = {}
+        self._option_lock = RLock()
+        self._last_option_publish: dict[str, float] = {}
+        self._option_publish_interval_seconds = 0.25
         self._snapshot_listeners: list[Callable[[MarketSnapshot], None]] = []
         self._analysis_listeners: list[Callable[[IndicatorSnapshot], None]] = []
         self._option_listeners: list[Callable[[OptionChainSnapshot], None]] = []
@@ -73,8 +76,16 @@ class Application:
 
     def process_quote(self, quote: Quote) -> None:
         if self.options.is_option_token(quote.instrument_token):
-            underlying = self._underlying_from_option_symbol(quote.symbol)
-            chain = self.options.update(quote, self._spot(underlying))
+            chain: OptionChainSnapshot | None = None
+            with self._option_lock:
+                contract = self.options.ingest(quote)
+                if contract is None:
+                    return
+                underlying = contract.underlying
+                now = monotonic()
+                if now - self._last_option_publish.get(underlying, 0.0) >= self._option_publish_interval_seconds:
+                    chain = self.options.snapshot(underlying, self._spot(underlying))
+                    self._last_option_publish[underlying] = now
             if chain is not None:
                 self._publish_option(chain)
             return
@@ -125,9 +136,12 @@ class Application:
                 if not contracts:
                     self.publish_status(f"no current {underlying} option contracts found")
                     continue
-                self.options.register(contracts)
+                with self._option_lock:
+                    self.options.register(contracts)
                 self.kite.add_subscriptions(contracts)
-                self._publish_option(self.options.snapshot(underlying, spot))
+                with self._option_lock:
+                    chain = self.options.snapshot(underlying, spot)
+                self._publish_option(chain)
             except Exception as error:
                 logger.exception("Option discovery failed for {}", underlying)
                 self.publish_status(f"option discovery failed for {underlying}: {error}")

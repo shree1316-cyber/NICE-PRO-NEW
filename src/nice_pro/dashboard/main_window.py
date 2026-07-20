@@ -90,6 +90,7 @@ class MainWindow(QMainWindow):
         self._signals = DashboardSignals()
         self._quotes: dict[str, Quote] = {}
         self._analyses: dict[str, dict[int, IndicatorSnapshot]] = {"NIFTY": {}, "SENSEX": {}}
+        self._rendered_matrix_versions: dict[str, tuple[tuple[int, object], ...]] = {"NIFTY": (), "SENSEX": ()}
         self._chains: dict[str, OptionChainSnapshot] = {}
         self._convictions: dict[str, ConvictionSnapshot] = {}
         self._kite_connected = False
@@ -607,9 +608,11 @@ class MainWindow(QMainWindow):
         if quote is not None:
             view["live"].setText(f"{quote.last_price:,.2f}")
             view["quote_meta"].setText(f"Bid / Ask: {_price_or_dash(quote.bid)} / {_price_or_dash(quote.ask)} | Live Kite quote")
-        if analyses:
+        matrix_version = tuple(sorted((timeframe, snapshot.calculated_at) for timeframe, snapshot in analyses.items()))
+        if analyses and matrix_version != self._rendered_matrix_versions.get(underlying, ()):
             view["indicator_summary"].setText(_timeframe_summary(analyses))  # type: ignore[union-attr]
             self._refresh_indicator_tables(view["indicator_tables"], analyses, chain)  # type: ignore[arg-type]
+            self._rendered_matrix_versions[underlying] = matrix_version
         if chain is not None:
             view["option"].setText(_option_summary_html(chain))
         if conviction is not None:

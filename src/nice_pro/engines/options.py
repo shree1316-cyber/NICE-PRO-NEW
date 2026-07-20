@@ -22,7 +22,8 @@ class OptionChainEngine:
     def is_option_token(self, token: int) -> bool:
         return token in self._contracts
 
-    def update(self, quote: Quote, spot: float | None = None) -> OptionChainSnapshot | None:
+    def ingest(self, quote: Quote) -> OptionContract | None:
+        """Store one option tick without recalculating the whole chain."""
         contract = self._contracts.get(quote.instrument_token)
         if contract is None:
             return None
@@ -30,6 +31,13 @@ class OptionChainEngine:
         self._premiums[quote.instrument_token].append(quote)
         if quote.open_interest is not None:
             self._first_oi.setdefault(quote.instrument_token, quote.open_interest)
+        return contract
+
+    def update(self, quote: Quote, spot: float | None = None) -> OptionChainSnapshot | None:
+        """Compatibility helper for callers/tests needing an immediate snapshot."""
+        contract = self.ingest(quote)
+        if contract is None:
+            return None
         return self.snapshot(contract.underlying, spot)
 
     def snapshot(self, underlying: str, spot: float | None = None) -> OptionChainSnapshot:
