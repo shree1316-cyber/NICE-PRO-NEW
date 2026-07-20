@@ -228,6 +228,10 @@ class KiteService:
                     continue
                 depth = tick.get("depth", {})
                 buy, sell = depth.get("buy", []), depth.get("sell", [])
+                top_bid_quantity = buy[0].get("quantity") if buy else None
+                top_ask_quantity = sell[0].get("quantity") if sell else None
+                bid_depth_quantity = sum(int(level.get("quantity") or 0) for level in buy) if buy else None
+                ask_depth_quantity = sum(int(level.get("quantity") or 0) for level in sell) if sell else None
                 timestamp = _normalise_kite_timestamp(
                     tick.get("exchange_timestamp") or tick.get("timestamp")
                 )
@@ -242,6 +246,11 @@ class KiteService:
                             bid=buy[0].get("price") if buy else None,
                             ask=sell[0].get("price") if sell else None,
                             open_interest=tick.get("oi"),
+                            last_quantity=tick.get("last_quantity"),
+                            top_bid_quantity=top_bid_quantity,
+                            top_ask_quantity=top_ask_quantity,
+                            bid_depth_quantity=bid_depth_quantity,
+                            ask_depth_quantity=ask_depth_quantity,
                         )
                     )
                 except Exception:

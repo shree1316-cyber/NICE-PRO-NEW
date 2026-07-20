@@ -44,6 +44,13 @@ For desktop responsiveness, NICE-PRO retains every live option tick but recalcul
 
 At startup NICE-PRO discovers and subscribes to the nearest current-month NIFTY and SENSEX futures. Their exchange-traded volume is overlaid on the corresponding spot-index candles solely to calculate the volume indicator category. Each volume row identifies this as a **futures-volume proxy**, never as spot-index volume.
 
+### Live microstructure fields
+
+- **Bid-Ask Spread:** direct average of the live ATM CE/PE best bid and best ask.
+- **ATM Book Imbalance:** direct, normalized imbalance from Kite's available top-five bid/offer quantities for the ATM CE/PE pair.
+- **Estimated CVD:** live estimate using price-versus-quote classification and available trade size. Kite does not supply exchange aggressor flags, so this must not be treated as true exchange CVD.
+- **OTM Continuation:** live chain-derived estimate from the first OTM call and put premium velocities. It is not an exchange-labelled event.
+
 The timeframe weights are deliberately category-level safeguards, not a claim that all 100 indicator rows are independent votes. They must be validated with paper-trade and historical results before being relied on. NICE-PRO contains no order-placement API. A trade plan is a paper-only candidate and is never an instruction or guarantee.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ROADMAP.md](docs/ROADMAP.md).

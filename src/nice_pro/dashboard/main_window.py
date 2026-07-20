@@ -781,6 +781,10 @@ def _option_summary_html(chain: OptionChainSnapshot) -> str:
         f"Nearest-expiry max pain: <b>{_number(chain.observed_max_pain, 0)}</b>",
         f"ATM IV skew (Put − Call): <b>{_signed(chain.iv_skew, '%')}</b>",
         f"ATM straddle / expected move: <b>{_number(chain.expected_move)}</b>",
+        f"ATM bid-ask spread (direct): <b>{_number(chain.atm_bid_ask_spread)}</b>",
+        f"ATM top-5 book imbalance (direct): <b>{_signed(chain.atm_book_imbalance)}</b>",
+        f"ATM estimated CVD: <b>{_number(chain.atm_estimated_cvd, 0)}</b>",
+        f"OTM continuation (derived): <b>{_signed(chain.otm_continuation)}</b>",
         "<span style='color:#67e8a5'>Complete nearest-expiry chain when all contracts receive a quote; later expiries are excluded.</span>",
     ))
 
@@ -926,7 +930,21 @@ def _option_indicator_overrides(chain: OptionChainSnapshot) -> dict[str, tuple[s
         "Nearest-expiry Max Pain": (_number(chain.observed_max_pain, 0), "INFO", "Computed from every available strike in NICE-PRO's nearest-expiry chain"),
         "ATM CE Premium Velocity": (_signed(call_velocity), "BULLISH" if call_velocity is not None and call_velocity > 0 else "BEARISH" if call_velocity is not None and call_velocity < 0 else "NEUTRAL", "Observed ATM call premium change per second"),
         "ATM PE Premium Velocity": (_signed(put_velocity), "BEARISH" if put_velocity is not None and put_velocity > 0 else "BULLISH" if put_velocity is not None and put_velocity < 0 else "NEUTRAL", "Observed ATM put premium change per second"),
+        "Bid-Ask Spread": (_number(chain.atm_bid_ask_spread), "INFO", "Direct ATM CE/PE average bid-ask spread from Kite top-five depth"),
+        "ATM Book Imbalance": (_signed(chain.atm_book_imbalance), _direction_state(chain.atm_book_imbalance), "Direct top-five ATM CE/PE bid quantity less ask quantity, normalized"),
+        "Estimated CVD": (_number(chain.atm_estimated_cvd, 0), _direction_state(chain.atm_estimated_cvd), "Estimated from tick price versus bid/ask and available trade size; Kite has no true aggressor flag"),
+        "OTM Continuation": (_signed(chain.otm_continuation), _direction_state(chain.otm_continuation), "Derived from first OTM call versus put premium velocity; not an exchange-labelled signal"),
     }
+
+
+def _direction_state(value: float | int | None) -> str:
+    if value is None:
+        return "WAITING"
+    if value > 0:
+        return "BULLISH"
+    if value < 0:
+        return "BEARISH"
+    return "NEUTRAL"
 
 
 def run_dashboard(application: "Application") -> int:

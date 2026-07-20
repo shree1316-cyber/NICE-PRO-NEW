@@ -15,6 +15,7 @@ class OptionChainEngine:
         self._quotes: dict[int, Quote] = {}
         self._first_oi: dict[int, int] = {}
         self._premiums: dict[int, deque[Quote]] = defaultdict(lambda: deque(maxlen=12))
+        self._estimated_cvd: dict[int, int] = defaultdict(int)
 
     def register(self, contracts: list[OptionContract]) -> None:
         self._contracts.update({contract.instrument_token: contract for contract in contracts})
@@ -27,6 +28,8 @@ class OptionChainEngine:
         contract = self._contracts.get(quote.instrument_token)
         if contract is None:
             return None
+        previous = self._quotes.get(quote.instrument_token)
+        self._estimated_cvd[quote.instrument_token] += _estimated_signed_volume(quote, previous)
         self._quotes[quote.instrument_token] = quote
         self._premiums[quote.instrument_token].append(quote)
         if quote.open_interest is not None:
@@ -55,6 +58,10 @@ class OptionChainEngine:
         observed_max_pain = _observed_max_pain(metrics, strikes)
         iv_skew = _atm_iv_skew(metrics, atm)
         expected_move = _atm_straddle(metrics, atm)
+        atm_spread = _atm_bid_ask_spread(metrics, atm)
+        atm_imbalance = _atm_book_imbalance(metrics, atm)
+        atm_cvd = _atm_estimated_cvd(metrics, atm)
+        otm_continuation = _otm_continuation(metrics, atm)
         return OptionChainSnapshot(
             underlying=underlying,
             calculated_at=datetime.now(tz=IST),
@@ -66,6 +73,10 @@ class OptionChainEngine:
             iv_skew=iv_skew,
             expected_move=expected_move,
             observed_strikes=tuple(strikes),
+            atm_bid_ask_spread=atm_spread,
+            atm_book_imbalance=atm_imbalance,
+            atm_estimated_cvd=atm_cvd,
+            otm_continuation=otm_continuation,
         )
 
     def _metric(self, contract: OptionContract, spot: float | None) -> OptionMetric | None:
@@ -76,7 +87,12 @@ class OptionChainEngine:
         oi_change = quote.open_interest - baseline if quote.open_interest is not None and baseline is not None else None
         velocity = _premium_velocity(tuple(self._premiums[contract.instrument_token]))
         iv = _implied_volatility(contract, quote, spot, self._risk_free_rate)
-        return OptionMetric(contract, quote.last_price, quote.open_interest, oi_change, iv, velocity)
+        return OptionMetric(
+            contract, quote.last_price, quote.open_interest, oi_change, iv, velocity,
+            quote.bid, quote.ask, quote.top_bid_quantity, quote.top_ask_quantity,
+            quote.bid_depth_quantity, quote.ask_depth_quantity,
+            self._estimated_cvd.get(contract.instrument_token),
+        )
 
 
 def _premium_velocity(quotes: tuple[Quote, ...]) -> float | None:
@@ -86,6 +102,30 @@ def _premium_velocity(quotes: tuple[Quote, ...]) -> float | None:
     # this guard for test data and any future data-provider integration.
     elapsed = (_as_aware_utc(quotes[-1].received_at) - _as_aware_utc(quotes[0].received_at)).total_seconds()
     return (quotes[-1].last_price - quotes[0].last_price) / elapsed if elapsed > 0 else None
+
+
+def _estimated_signed_volume(current: Quote, previous: Quote | None) -> int:
+    """Estimate aggressor-signed volume from top-of-book and price movement.
+
+    Kite does not send exchange trade-side/aggressor flags. This is therefore
+    explicitly an estimate, never true exchange CVD.
+    """
+    if previous is None:
+        return 0
+    size = current.last_quantity or 0
+    if not size and current.volume is not None and previous.volume is not None:
+        size = max(0, current.volume - previous.volume)
+    if size <= 0:
+        return 0
+    if current.ask is not None and current.last_price >= current.ask:
+        return size
+    if current.bid is not None and current.last_price <= current.bid:
+        return -size
+    if current.last_price > previous.last_price:
+        return size
+    if current.last_price < previous.last_price:
+        return -size
+    return 0
 
 
 def _as_aware_utc(value: datetime) -> datetime:
@@ -129,6 +169,58 @@ def _atm_straddle(metrics: tuple[OptionMetric, ...], atm: float | None) -> float
     premiums = {metric.contract.option_type: metric.last_price for metric in metrics if metric.contract.strike == atm}
     call, put = premiums.get(OptionType.CALL), premiums.get(OptionType.PUT)
     return call + put if call is not None and put is not None else None
+
+
+def _atm_bid_ask_spread(metrics: tuple[OptionMetric, ...], atm: float | None) -> float | None:
+    spreads = [
+        metric.ask - metric.bid
+        for metric in metrics
+        if metric.contract.strike == atm and metric.bid is not None and metric.ask is not None and metric.ask >= metric.bid
+    ]
+    return sum(spreads) / len(spreads) if spreads else None
+
+
+def _atm_book_imbalance(metrics: tuple[OptionMetric, ...], atm: float | None) -> float | None:
+    """Direct top-five-depth imbalance, normalized to -1 .. +1."""
+    bids = sum(metric.bid_depth_quantity or 0 for metric in metrics if metric.contract.strike == atm)
+    asks = sum(metric.ask_depth_quantity or 0 for metric in metrics if metric.contract.strike == atm)
+    total = bids + asks
+    return (bids - asks) / total if total else None
+
+
+def _atm_estimated_cvd(metrics: tuple[OptionMetric, ...], atm: float | None) -> int | None:
+    calls = [metric.estimated_cvd for metric in metrics if metric.contract.strike == atm and metric.contract.option_type is OptionType.CALL]
+    puts = [metric.estimated_cvd for metric in metrics if metric.contract.strike == atm and metric.contract.option_type is OptionType.PUT]
+    if not calls or not puts or calls[0] is None or puts[0] is None:
+        return None
+    # Rising call-aggression relative to put-aggression is positive for the
+    # underlying; the inverse is negative.
+    return calls[0] - puts[0]
+
+
+def _otm_continuation(metrics: tuple[OptionMetric, ...], atm: float | None) -> float | None:
+    """Derived OTM continuation score from the first available OTM pair.
+
+    Positive means call-led continuation, negative means put-led continuation.
+    It is a chain-derived estimate, not an exchange-labelled order-flow event.
+    """
+    if atm is None:
+        return None
+    call_candidates = sorted(
+        (metric for metric in metrics if metric.contract.option_type is OptionType.CALL and metric.contract.strike > atm),
+        key=lambda metric: metric.contract.strike,
+    )
+    put_candidates = sorted(
+        (metric for metric in metrics if metric.contract.option_type is OptionType.PUT and metric.contract.strike < atm),
+        key=lambda metric: metric.contract.strike,
+        reverse=True,
+    )
+    if not call_candidates or not put_candidates:
+        return None
+    call_velocity, put_velocity = call_candidates[0].premium_velocity, put_candidates[0].premium_velocity
+    if call_velocity is None or put_velocity is None:
+        return None
+    return call_velocity - put_velocity
 
 
 def _implied_volatility(contract: OptionContract, quote: Quote, spot: float | None, rate: float) -> float | None:

@@ -37,3 +37,23 @@ def test_option_premium_velocity_handles_mixed_naive_and_aware_timestamps() -> N
     assert chain is not None
     metric = next(item for item in chain.metrics if item.contract.option_type is OptionType.CALL)
     assert metric.premium_velocity == 1
+
+
+def test_option_chain_reports_direct_depth_and_labelled_estimates() -> None:
+    expiry = date.today() + timedelta(days=7)
+    call = OptionContract(10, "NFO:NIFTYCE", "NIFTY", expiry, 25000, OptionType.CALL)
+    put = OptionContract(11, "NFO:NIFTYPE", "NIFTY", expiry, 25000, OptionType.PUT)
+    otm_call = OptionContract(12, "NFO:NIFTYOTMCE", "NIFTY", expiry, 25100, OptionType.CALL)
+    otm_put = OptionContract(13, "NFO:NIFTYOTMPE", "NIFTY", expiry, 24900, OptionType.PUT)
+    engine = OptionChainEngine()
+    engine.register([call, put, otm_call, otm_put])
+    now = datetime.now(timezone.utc)
+    for contract, price, bid_depth, ask_depth in ((call, 100, 120, 80), (put, 90, 100, 100), (otm_call, 40, 100, 90), (otm_put, 35, 90, 100)):
+        engine.update(Quote(contract.instrument_token, contract.symbol, price, now, volume=100, bid=price - 1, ask=price + 1, last_quantity=5, bid_depth_quantity=bid_depth, ask_depth_quantity=ask_depth), spot=25000)
+        chain = engine.update(Quote(contract.instrument_token, contract.symbol, price + 1, now + timedelta(seconds=1), volume=105, bid=price, ask=price + 2, last_quantity=5, bid_depth_quantity=bid_depth, ask_depth_quantity=ask_depth), spot=25000)
+
+    assert chain is not None
+    assert chain.atm_bid_ask_spread == 2
+    assert chain.atm_book_imbalance == 0.1
+    assert chain.atm_estimated_cvd is not None
+    assert chain.otm_continuation is not None

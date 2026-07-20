@@ -29,6 +29,11 @@ class Quote:
     bid: float | None = None
     ask: float | None = None
     open_interest: int | None = None
+    last_quantity: int | None = None
+    top_bid_quantity: int | None = None
+    top_ask_quantity: int | None = None
+    bid_depth_quantity: int | None = None
+    ask_depth_quantity: int | None = None
 
 
 class OptionType(StrEnum):
@@ -63,6 +68,13 @@ class OptionMetric:
     open_interest_change: int | None
     implied_volatility: float | None
     premium_velocity: float | None
+    bid: float | None = None
+    ask: float | None = None
+    top_bid_quantity: int | None = None
+    top_ask_quantity: int | None = None
+    bid_depth_quantity: int | None = None
+    ask_depth_quantity: int | None = None
+    estimated_cvd: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +92,10 @@ class OptionChainSnapshot:
     iv_skew: float | None = None
     expected_move: float | None = None
     observed_strikes: tuple[float, ...] = ()
+    atm_bid_ask_spread: float | None = None
+    atm_book_imbalance: float | None = None
+    atm_estimated_cvd: int | None = None
+    otm_continuation: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
