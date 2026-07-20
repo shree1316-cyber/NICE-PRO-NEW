@@ -299,32 +299,34 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
-        header_row = QHBoxLayout()
         heading, heading_layout = self._panel("LIVE OPTION CHAIN — COMPLETE NEAREST EXPIRY", "purple")
         heading_layout.addWidget(self._muted("Live LTP, OI, session OI delta, model IV and premium velocity for every subscribed CE/PE strike in the nearest expiry. Later expiries are separate chains; no order is submitted."))
-        header_row.addWidget(heading, 3)
-        hero_panel, hero_layout = self._panel("FULL-CHAIN HERO CONVICTION — PAPER ONLY", "green")
+        layout.addWidget(heading)
+
         hero_row = QHBoxLayout()
+        hero_row.setSpacing(8)
         for underlying in ("NIFTY", "SENSEX"):
+            hero_panel, hero_layout = self._panel(f"{underlying} FULL-CHAIN HERO — PAPER ONLY", "green")
             hero = QLabel(f"{underlying}: waiting for full-chain evidence")
             hero.setObjectName("optionHero")
             hero.setWordWrap(True)
-            hero_row.addWidget(hero)
+            hero_layout.addWidget(hero)
+            hero_row.addWidget(hero_panel, 1)
             self._option_hero_cards[underlying] = hero
-        hero_layout.addLayout(hero_row)
-        header_row.addWidget(hero_panel, 4)
-        layout.addLayout(header_row)
-        scalp_panel, scalp_layout = self._panel("LIVE OPTION SCALPING BOX — PAPER ONLY", "amber")
-        scalp_layout.addWidget(self._muted("Requires aligned 10s/30s timing plus ATM top-five book, estimated CVD, OTM continuation, premium velocity, and an acceptable spread."))
+        layout.addLayout(hero_row)
+
         scalp_row = QHBoxLayout()
+        scalp_row.setSpacing(8)
         for underlying in ("NIFTY", "SENSEX"):
+            scalp_panel, scalp_layout = self._panel(f"{underlying} OPTION SCALPING BOX — PAPER ONLY", "amber")
+            scalp_layout.addWidget(self._muted("Requires aligned 10s/30s timing, ATM top-five book, estimated CVD, OTM continuation, premium velocity, and an acceptable spread."))
             scalp = QLabel(f"{underlying}: waiting for live scalp conditions")
             scalp.setObjectName("scalpBox")
             scalp.setWordWrap(True)
-            scalp_row.addWidget(scalp)
+            scalp_layout.addWidget(scalp)
+            scalp_row.addWidget(scalp_panel, 1)
             self._scalp_cards[underlying] = scalp
-        scalp_layout.addLayout(scalp_row)
-        layout.addWidget(scalp_panel)
+        layout.addLayout(scalp_row)
         tabs = QTabWidget()
         tabs.setObjectName("chainTabs")
         for underlying in ("NIFTY", "SENSEX"):
@@ -1156,8 +1158,8 @@ QLabel#scoreText { color: #dce8f6; font-size: 11px; font-weight: 800; }
 QLabel#mtfScoreBadge { background: #102b46; color: #d8b4fe; border: 1px solid #6d42a3; border-radius: 5px; padding: 3px 10px; font-size: 12px; font-weight: 900; }
 QLabel#timeframeStrip { color: #dce8f6; font-size: 10px; font-weight: 800; padding: 1px 0; }
 QLabel#workspaceReasons, QLabel#workspacePlan, QLabel#chainSummary { color: #dce8f6; font-size: 12px; }
-QLabel#optionHero { color: #dce8f6; font-size: 10px; padding: 3px 7px; border-left: 1px solid #1c5b44; }
-QLabel#scalpBox { color: #dce8f6; font-size: 10px; padding: 4px 8px; border-left: 1px solid #7b5720; }
+QLabel#optionHero { color: #dce8f6; font-size: 11px; padding: 6px 8px; }
+QLabel#scalpBox { color: #dce8f6; font-size: 11px; padding: 6px 8px; }
 QLabel#matrixSummary { color: #dce8f6; font-size: 9px; padding: 3px 7px; border-left: 1px solid #1d4f76; }
 QProgressBar { height: 7px; border: 0; border-radius: 3px; background: #142942; }
 QProgressBar::chunk { border-radius: 3px; background: qlineargradient(x1:0, x2:1, stop:0 #f59e0b, stop:0.55 #b9d43e, stop:1 #22c55e); }
