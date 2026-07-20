@@ -63,4 +63,10 @@ The Options page also contains a separate **Scalping Box** for each index. Its 1
 
 The timeframe weights are deliberately category-level safeguards, not a claim that all 100 indicator rows are independent votes. They must be validated with paper-trade and historical results before being relied on. NICE-PRO contains no order-placement API. A trade plan is a paper-only candidate and is never an instruction or guarantee.
 
+### Research journal and 10-day reports
+
+The **Journal** page stores a local, decision-time research snapshot for every completed **5-minute core candle** after the market, option-chain and MTF models are ready. Each snapshot contains the seven timeframe readings, all configured indicator-matrix rows, core/MTF scores and gate, reasons/conflicts, full nearest-expiry chain metrics, Hero/Scalp assessments and the candidate plan. The local SQLite file defaults to `data/nice_pro_journal.sqlite3` and can be relocated through `NICE_JOURNAL_DATABASE`.
+
+The paper tracker opens only a qualifying MTF paper plan. It records a measurable outcome when the simulated premium reaches the model stop loss (**LOSS**) or Target 1 (**WIN**); it never sends an order. The **Reports** page shows observed 10-day closed-trade counts, win rate, P/L per lot, average R and market split. Do not optimise from a few outcomes: retain a hold-out sample and alter one small weight group at a time.
+
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ROADMAP.md](docs/ROADMAP.md).

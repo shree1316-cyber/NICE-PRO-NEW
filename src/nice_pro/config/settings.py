@@ -17,6 +17,7 @@ class Settings:
     paper_trading_only: bool = True
     option_strikes_each_side: int = 5
     option_chain_scope: str = "full_current_expiry"
+    journal_database_path: Path = Path("data/nice_pro_journal.sqlite3")
     subscriptions: tuple["Subscription", ...] = ()
 
     @classmethod
@@ -32,6 +33,7 @@ class Settings:
             in {"1", "true", "yes", "on"},
             option_strikes_each_side=max(1, int(getenv("NICE_OPTION_STRIKES_EACH_SIDE", "5"))),
             option_chain_scope=getenv("NICE_OPTION_CHAIN_SCOPE", "full_current_expiry").strip().lower(),
+            journal_database_path=Path(getenv("NICE_JOURNAL_DATABASE", "data/nice_pro_journal.sqlite3")),
             subscriptions=_parse_subscriptions(
                 getenv("NICE_SUBSCRIPTIONS", "NSE:NIFTY 50:256265,BSE:SENSEX:265")
             ),

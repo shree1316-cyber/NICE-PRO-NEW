@@ -18,7 +18,9 @@ from nice_pro.engines.market_state import MarketState
 from nice_pro.engines.options import OptionChainEngine
 from nice_pro.engines.option_hero import OptionHeroEngine
 from nice_pro.engines.scalp import ScalpEngine
+from nice_pro.journal.store import ResearchJournal
 from nice_pro.models.market import Candle, ConvictionSnapshot, IndicatorSnapshot, MarketSnapshot, OptionChainSnapshot, OptionHeroSnapshot, Quote, ScalpSnapshot
+from nice_pro.papertrade.tracker import PaperTradeTracker
 from nice_pro.services.kite import KiteService
 
 ANALYSIS_TIMEFRAMES = (10, 30, 60, 300, 900, 1800, 3600)
@@ -36,12 +38,15 @@ class Application:
         self.option_hero = OptionHeroEngine()
         self.scalp = ScalpEngine()
         self.conviction = ConvictionEngine()
+        self.journal = ResearchJournal(settings.journal_database_path)
+        self.paper_trades = PaperTradeTracker(self.journal)
         self.alerts = QualityAlertEngine()
         self.kite = KiteService(settings)
         self._analysis_by_underlying: dict[str, dict[int, IndicatorSnapshot]] = {}
         self._options_by_underlying: dict[str, OptionChainSnapshot] = {}
         self._option_lock = RLock()
         self._last_option_publish: dict[str, float] = {}
+        self._last_journal_candle: dict[str, object] = {}
         # A complete nearest-expiry chain can contain hundreds of contracts.
         # Ticks are retained at full stream speed, while the expensive chain
         # analytics and table repaint are intentionally sampled at 1 Hz.
@@ -260,6 +265,16 @@ class Application:
         if analysis is None or options is None:
             return
         snapshot = self.conviction.evaluate(analysis, options, analyses)
+        decision_id: int | None = None
+        # Save one research-grade decision snapshot for each completed 5-minute
+        # candle.  Writing on every option tick would create duplicate records
+        # without adding useful evidence for later 10-day optimisation.
+        if self._last_journal_candle.get(underlying) != analysis.calculated_at:
+            hero = self.option_hero.evaluate(options)
+            scalp = self.scalp.evaluate(options, analyses)
+            decision_id = self.journal.capture_decision(snapshot, analyses, options, hero, scalp)
+            self._last_journal_candle[underlying] = analysis.calculated_at
+        self.paper_trades.evaluate(snapshot, options, decision_id)
         for listener in tuple(self._conviction_listeners):
             listener(snapshot)
         if self.alerts.should_alert(snapshot):

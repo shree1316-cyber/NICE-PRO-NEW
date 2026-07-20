@@ -143,13 +143,14 @@ class MainWindow(QMainWindow):
         self._pages.addWidget(self._scrollable_page(self._analysis_page("SENSEX")))
         self._pages.addWidget(self._scrollable_page(self._options_page()))
         self._pages.addWidget(self._scrollable_page(self._paper_page()))
-        self._pages.addWidget(self._scrollable_page(self._placeholder_page("JOURNAL", "Journal and annotated review arrive in the next research milestone.")))
-        self._pages.addWidget(self._scrollable_page(self._placeholder_page("REPORTS", "Performance reports are scheduled after paper-trade data is collected.")))
+        self._pages.addWidget(self._scrollable_page(self._journal_page()))
+        self._pages.addWidget(self._scrollable_page(self._reports_page()))
         layout.addWidget(self._pages, 1)
         layout.addWidget(self._footer())
         self.setCentralWidget(root)
         self.setStyleSheet(_STYLESHEET)
         self._switch_page(0)
+        self._refresh_research_views()
 
     def _header(self) -> QFrame:
         header = QFrame()
@@ -388,6 +389,59 @@ class MainWindow(QMainWindow):
             self._analysis_views.setdefault(underlying, {})["paper"] = detail
         return page
 
+    def _journal_page(self) -> QWidget:
+        """Decision-time audit trail for paper-trade review and optimisation."""
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        overview, overview_layout = self._panel("RESEARCH JOURNAL — DECISION-TIME SNAPSHOTS", "purple")
+        self._journal_overview = self._muted(
+            "Every completed 5-minute core candle is saved locally with all timeframe readings, the 100-indicator matrix, full nearest-expiry chain metrics, Hero/Scalp evidence, filters, conflicts and paper-plan context."
+        )
+        overview_layout.addWidget(self._journal_overview)
+        overview_layout.addWidget(self._muted("These records preserve what the engine knew at the time; they are designed for later reverse-engineering, not hindsight scoring."))
+        layout.addWidget(overview)
+        table_panel, table_layout = self._panel("LATEST DECISION RECORDS", "blue")
+        self._journal_table = QTableWidget(0, 8)
+        self._journal_table.setObjectName("journalTable")
+        self._journal_table.setHorizontalHeaderLabels(("TIME (UTC)", "MARKET", "SIDE", "GRADE", "MTF", "ALIGNMENT", "5M BULL", "5M BEAR"))
+        self._journal_table.verticalHeader().setVisible(False)
+        self._journal_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._journal_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        self._journal_table.setAlternatingRowColors(True)
+        self._journal_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        table_layout.addWidget(self._journal_table, 1)
+        layout.addWidget(table_panel, 1)
+        return page
+
+    def _reports_page(self) -> QWidget:
+        """Observed paper-results summary. It stays honest when no sample exists."""
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        summary, summary_layout = self._panel("10-DAY PAPER-TRADE PERFORMANCE", "green")
+        self._report_summary = QLabel("Collecting paper-trade outcomes")
+        self._report_summary.setObjectName("reportSummary")
+        self._report_summary.setWordWrap(True)
+        summary_layout.addWidget(self._report_summary)
+        layout.addWidget(summary)
+        method, method_layout = self._panel("OPTIMISATION & REVERSE-ENGINEERING DATA", "amber")
+        method_layout.addWidget(self._muted(
+            "For each saved decision, NICE-PRO retains: 10s/30s/1m/5m/15m/30m/1h regimes and readings; category-level matrix states; core and MTF scores; gate/alignment; bullish, bearish and conflict reasons; ATM plan; PCR, OI and OI changes; IV/skew, expected move, spread, book imbalance, estimated CVD, OTM continuation; Hero and Scalp scores."
+        ))
+        method_layout.addWidget(self._muted(
+            "Use at least 10 trading days as an initial review window. Compare only enough observations, keep a hold-out period, and adjust one small weight set at a time. A paper result is not evidence of guaranteed future performance."
+        ))
+        layout.addWidget(method)
+        per_market, market_layout = self._panel("RESULTS BY MARKET", "blue")
+        self._report_by_market = self._muted("No closed paper trades in the selected window.")
+        market_layout.addWidget(self._report_by_market)
+        layout.addWidget(per_market)
+        layout.addStretch()
+        return page
+
     def _sidebar(self) -> QFrame:
         side = QFrame()
         side.setObjectName("sidebar")
@@ -569,6 +623,8 @@ class MainWindow(QMainWindow):
 
     def _switch_page(self, index: int) -> None:
         self._pages.setCurrentIndex(index)
+        if index in {5, 6}:
+            self._refresh_research_views()
         for position, button in enumerate(self._nav_buttons):
             button.setProperty("active", position == index)
             button.style().unpolish(button)
@@ -773,6 +829,50 @@ class MainWindow(QMainWindow):
         self._clock_label.setText(now.toString("hh:mm:ss AP | ddd, dd MMM"))
         self._session_clock.setText(now.toString("hh:mm:ss AP"))
         self._right_clock.setText(now.toString("hh:mm:ss AP"))
+        if now.time().second() % 5 == 0:
+            self._refresh_research_views()
+
+    def _refresh_research_views(self) -> None:
+        """Refresh local SQLite-derived research widgets without touching Kite."""
+        if not hasattr(self, "_journal_table"):
+            return
+        decisions = self._application.journal.recent_decisions(25)
+        self._journal_table.setRowCount(len(decisions))
+        for row, decision in enumerate(decisions):
+            values = (
+                decision["created_at"].replace("T", " ").replace("+00:00", ""),
+                decision["underlying"], decision["side"], decision["grade"],
+                str(decision["mtf_score"]), decision["alignment"],
+                str(decision["core_bull"]), str(decision["core_bear"]),
+            )
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                if column == 2:
+                    item.setForeground(QColor("#4ade80") if value == "BUY" else QColor("#fda4af") if value == "SELL" else QColor("#facc15"))
+                self._journal_table.setItem(row, column, item)
+        self._journal_overview.setText(
+            f"{len(decisions)} latest decision snapshots shown. Full raw inputs are stored locally at {self._application.journal.path}. "
+            "A snapshot is created once per completed 5-minute core candle, not per tick."
+        )
+        report = self._application.journal.performance_summary(10)
+        if report["closed_trades"] == 0:
+            summary = "No closed paper trades yet in the latest 10-day window. Win rate will appear only after paper positions have reached the model stop loss or Target 1."
+        else:
+            rate = f"{report['win_rate']:.1f}%" if report["win_rate"] is not None else "—"
+            average_r = f"{report['average_r']:.2f}R" if report["average_r"] is not None else "—"
+            summary = (
+                f"Closed: {report['closed_trades']} | Wins: {report['wins']} | Losses: {report['losses']} | "
+                f"Observed win rate: {rate} | Net P/L per lot: ₹{report['net_pnl_per_lot']:,.0f} | Average: {average_r}"
+            )
+        self._report_summary.setText(summary)
+        by_market = report["by_underlying"]
+        if by_market:
+            self._report_by_market.setText("\n".join(
+                f"{market}: {stats['trades']} closed | {stats['wins']} wins | {stats['losses']} losses | observed win rate {stats['win_rate']:.1f}%"
+                for market, stats in sorted(by_market.items())
+            ))
+        else:
+            self._report_by_market.setText("No closed paper trades in the selected 10-day window.")
 
     def closeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         self._application.stop()
