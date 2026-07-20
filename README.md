@@ -69,4 +69,16 @@ The **Journal** page stores a local, decision-time research snapshot for every c
 
 The paper tracker opens only a qualifying MTF paper plan. It records a measurable outcome when the simulated premium reaches the model stop loss (**LOSS**) or Target 1 (**WIN**); it never sends an order. The **Reports** page shows observed 10-day closed-trade counts, win rate, P/L per lot, average R and market split. Do not optimise from a few outcomes: retain a hold-out sample and alter one small weight group at a time.
 
+### 300-day Kite core backtest
+
+Run a historical, no-look-ahead replay from the project folder:
+
+```powershell
+python -m nice_pro.backtest.runner --underlying NIFTY --days 300 --optimise
+```
+
+Replace `NIFTY` with `SENSEX` for a separate report. Kite minute requests are automatically split into safe 60-day chunks. The command saves a JSON performance summary, a trade-by-trade CSV, and (with `--optimise`) a small parameter-candidate report under `data/backtests/`.
+
+This is explicitly a **Core Directional Backtest**: it validates historical 1m/5m/15m/30m/1h price-based MTF logic, score/grade gating, ATR risk, time filters, and target/stop outcomes. It cannot recreate 10s/30s timing, historical full option-chain states, Hero/Scalp logic, bid/ask depth, estimated CVD, OTM continuation, or historical option-premium P/L from Kite candles. Those remain forward-test-only fields in the live journal.
+
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ROADMAP.md](docs/ROADMAP.md).

@@ -80,6 +80,47 @@ class KiteService:
             )
         return candles
 
+    def historical_minute_candles_range(
+        self, subscription: Subscription, start: datetime, end: datetime
+    ) -> list[Candle]:
+        """Download a long minute history in Kite-safe 60-day request windows.
+
+        Kite's historical endpoint exposes minute bars but limits the time span
+        of an individual minute request.  Splitting is intentional so a 150 or
+        300-day core backtest remains repeatable and does not rely on hidden
+        data-provider behaviour.
+        """
+        if start >= end:
+            return []
+        step = timedelta(days=60)
+        cursor = start
+        output: list[Candle] = []
+        while cursor < end:
+            chunk_end = min(cursor + step, end)
+            rows = self.client().historical_data(
+                subscription.instrument_token, cursor, chunk_end, "minute", oi=True
+            )
+            for row in rows:
+                opened_at = row["date"]
+                if opened_at.tzinfo is None:
+                    opened_at = opened_at.replace(tzinfo=IST)
+                output.append(
+                    Candle(
+                        symbol=subscription.symbol,
+                        timeframe_seconds=60,
+                        opened_at=opened_at,
+                        closed_at=opened_at + timedelta(minutes=1),
+                        open=float(row["open"]), high=float(row["high"]),
+                        low=float(row["low"]), close=float(row["close"]),
+                        volume=int(row.get("volume") or 0),
+                    )
+                )
+            # One minute offset prevents duplicate boundary candles between
+            # adjacent requests while preserving every completed bar.
+            cursor = chunk_end + timedelta(minutes=1)
+        deduplicated = {candle.opened_at: candle for candle in output}
+        return [deduplicated[key] for key in sorted(deduplicated)]
+
     def nearest_option_contracts(
         self, underlying: str, spot: float, strikes_each_side: int = 2
     ) -> list[OptionContract]:
