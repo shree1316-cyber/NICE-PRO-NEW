@@ -41,65 +41,65 @@ class OptionHeroEngine:
         pcr = chain.put_call_ratio_oi
         if pcr is not None:
             if pcr >= 1.15:
-                bullish += 12
+                bullish += 20
                 reasons.append(f"PCR {pcr:.2f} favours put-side OI")
             elif pcr <= 0.85:
-                bearish += 12
+                bearish += 20
                 reasons.append(f"PCR {pcr:.2f} favours call-side OI")
             else:
                 conflicts.append(f"PCR {pcr:.2f} is neutral")
         if call_oi and put_oi:
             if put_oi > call_oi:
-                bullish += 4
+                bullish += 7
                 reasons.append("Total put OI exceeds call OI")
             elif call_oi > put_oi:
-                bearish += 4
+                bearish += 7
                 reasons.append("Total call OI exceeds put OI")
         if call_delta or put_delta:
             if put_delta > call_delta:
-                bullish += 8
+                bullish += 13
                 reasons.append("Session put OI change leads call OI change")
             elif call_delta > put_delta:
-                bearish += 8
+                bearish += 13
                 reasons.append("Session call OI change leads put OI change")
 
         skew = chain.iv_skew
         if skew is not None:
             if skew <= -0.5:
-                bullish += 7
+                bullish += 12
                 reasons.append("ATM call IV exceeds put IV")
             elif skew >= 0.5:
-                bearish += 7
+                bearish += 12
                 reasons.append("ATM put IV exceeds call IV")
         else:
             conflicts.append("ATM IV skew is not ready")
 
         if chain.atm_book_imbalance is not None:
             if chain.atm_book_imbalance >= 0.10:
-                bullish += 10
+                bullish += 17
                 reasons.append("ATM top-5 book is bid-heavy")
             elif chain.atm_book_imbalance <= -0.10:
-                bearish += 10
+                bearish += 17
                 reasons.append("ATM top-5 book is offer-heavy")
         else:
             conflicts.append("ATM top-5 depth is not ready")
 
         if chain.atm_estimated_cvd is not None:
             if chain.atm_estimated_cvd > 0:
-                bullish += 10
+                bullish += 17
                 reasons.append("ATM estimated CVD is positive")
             elif chain.atm_estimated_cvd < 0:
-                bearish += 10
+                bearish += 17
                 reasons.append("ATM estimated CVD is negative")
         else:
             conflicts.append("Estimated CVD is warming up")
 
         if chain.otm_continuation is not None:
             if chain.otm_continuation > 0:
-                bullish += 9
+                bullish += 14
                 reasons.append("First OTM call velocity leads put velocity")
             elif chain.otm_continuation < 0:
-                bearish += 9
+                bearish += 14
                 reasons.append("First OTM put velocity leads call velocity")
         else:
             conflicts.append("OTM continuation is warming up")
@@ -115,7 +115,7 @@ class OptionHeroEngine:
 
         side = _side(bullish, bearish)
         directional = max(bullish, bearish)
-        confidence = min(100, directional + abs(bullish - bearish) // 2)
+        confidence = _confidence(bullish, bearish, len(conflicts))
         grade = _grade(side, directional, len(conflicts))
         plan, rejection = self._plan(chain, side, grade)
         if rejection:
@@ -173,9 +173,9 @@ def _risk_capped_plan(
 
 
 def _side(bullish: int, bearish: int) -> Side:
-    if bullish - bearish >= 10:
+    if bullish - bearish >= 15:
         return Side.BUY
-    if bearish - bullish >= 10:
+    if bearish - bullish >= 15:
         return Side.SELL
     return Side.NEUTRAL
 
@@ -190,3 +190,17 @@ def _grade(side: Side, directional: int, conflicts: int) -> TradeGrade:
     if directional >= 25:
         return TradeGrade.B
     return TradeGrade.C
+
+
+def _confidence(bullish: int, bearish: int, conflicts: int) -> int:
+    """Return evidence quality, not a predicted chance of a winning trade.
+
+    The seven directional components form a true 100-point budget. Coverage
+    reflects how much live directional evidence is available; dominance reflects
+    how strongly one direction outweighs the other. Missing/uncertain fields
+    reduce the displayed confidence.
+    """
+    coverage = min(100, bullish + bearish)
+    dominance = abs(bullish - bearish)
+    base = round(coverage * 0.60 + dominance * 0.40)
+    return max(0, min(100, base - min(20, conflicts * 5)))

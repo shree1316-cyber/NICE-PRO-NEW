@@ -27,6 +27,9 @@ def test_full_chain_hero_creates_a_risk_capped_paper_call_plan() -> None:
     hero = OptionHeroEngine().evaluate(chain)
 
     assert hero.side is Side.BUY
+    assert hero.bullish_score == 100
+    assert hero.bearish_score == 0
+    assert hero.confidence == 100
     assert hero.grade is TradeGrade.A_PLUS
     assert hero.plan is not None
     assert hero.plan.option_symbol == call.symbol
