@@ -6,7 +6,7 @@ import argparse
 import csv
 import json
 from dataclasses import asdict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
 from nice_pro.backtest.core import CoreBacktestConfig, CoreBacktester
@@ -15,13 +15,22 @@ from nice_pro.config.settings import Settings, Subscription
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="NICE-PRO Kite core directional backtest")
-    parser.add_argument("--days", type=int, default=300, help="History length from 30 to 300 days (default: 300)")
+    parser.add_argument("--days", type=int, help="Rolling history length from 30 to 300 calendar days")
+    parser.add_argument("--from-date", type=_date_arg, help="Inclusive start date: YYYY-MM-DD")
+    parser.add_argument("--to-date", type=_date_arg, help="Inclusive end date: YYYY-MM-DD")
     parser.add_argument("--underlying", choices=("NIFTY", "SENSEX"), default="NIFTY")
     parser.add_argument("--optimise", action="store_true", help="Run a small train/test parameter sweep; never changes live settings")
     parser.add_argument("--output", type=Path, default=Path("data/backtests"))
     args = parser.parse_args()
-    if not 30 <= args.days <= 300:
-        parser.error("--days must be between 30 and 300")
+    using_dates = args.from_date is not None or args.to_date is not None
+    if using_dates and (args.from_date is None or args.to_date is None):
+        parser.error("--from-date and --to-date must be used together")
+    if using_dates and args.days is not None:
+        parser.error("Use either --days or --from-date/--to-date, not both")
+    if not using_dates:
+        args.days = args.days or 300
+        if not 30 <= args.days <= 300:
+            parser.error("--days must be between 30 and 300")
     settings = Settings.load()
     # Keep CLI help and offline inspection available even before optional
     # Kite dependencies have been installed.
@@ -31,12 +40,22 @@ def main() -> None:
     subscription = _subscription_for(settings.subscriptions, args.underlying)
     if subscription is None:
         raise SystemExit(f"No configured subscription found for {args.underlying}.")
-    end = datetime.now(timezone.utc)
-    start = end - timedelta(days=args.days)
-    print(f"Downloading {args.days} days of completed 1-minute {args.underlying} candles in Kite-safe chunks...")
+    if using_dates:
+        if args.from_date >= args.to_date:
+            parser.error("--to-date must be after --from-date")
+        start = datetime.combine(args.from_date, time(9, 15), tzinfo=timezone(timedelta(hours=5, minutes=30)))
+        end = datetime.combine(args.to_date, time(15, 30), tzinfo=timezone(timedelta(hours=5, minutes=30)))
+        period_label = f"{args.from_date.isoformat()} to {args.to_date.isoformat()}"
+    else:
+        end = datetime.now(timezone.utc)
+        start = end - timedelta(days=args.days)
+        period_label = f"last {args.days} calendar days"
+    print(f"Downloading completed 1-minute {args.underlying} candles for {period_label} in Kite-safe chunks...")
     candles = service.historical_minute_candles_range(subscription, start, end)
     if not candles:
         raise SystemExit("Kite returned no historical candles. Check your access token and instrument token.")
+    sessions = {candle.opened_at.date() for candle in candles}
+    print(f"Received {len(candles):,} candles across {len(sessions)} exchange sessions.")
     report = CoreBacktester().run(candles)
     args.output.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -49,6 +68,13 @@ def main() -> None:
         path = base.with_name(base.name + "_optimisation.json")
         path.write_text(json.dumps(optimisation, indent=2), encoding="utf-8")
         print(f"Saved optimisation candidates: {path}")
+
+
+def _date_arg(value: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("Expected YYYY-MM-DD") from error
 
 
 def _subscription_for(subscriptions: tuple[Subscription, ...], underlying: str) -> Subscription | None:
