@@ -129,6 +129,20 @@ class OptionHeroSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class ScalpSnapshot:
+    """Short-horizon, paper-only option scalp assessment."""
+
+    underlying: str
+    calculated_at: datetime
+    side: Side
+    score: int
+    confidence: int
+    reasons: tuple[str, ...] = ()
+    conflicts: tuple[str, ...] = ()
+    plan: TradePlan | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ConvictionSnapshot:
     underlying: str
     calculated_at: datetime

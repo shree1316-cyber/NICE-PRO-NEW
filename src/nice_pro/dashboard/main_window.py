@@ -34,6 +34,7 @@ from nice_pro.models.market import (
     OptionMetric,
     OptionType,
     Quote,
+    ScalpSnapshot,
     Side,
 )
 
@@ -46,6 +47,7 @@ class DashboardSignals(QObject):
     analysis = Signal(object)
     options = Signal(object)
     option_hero = Signal(object)
+    scalp = Signal(object)
     conviction = Signal(object)
     status = Signal(str)
 
@@ -95,6 +97,7 @@ class MainWindow(QMainWindow):
         self._rendered_matrix_versions: dict[str, tuple[tuple[int, object], ...]] = {"NIFTY": (), "SENSEX": ()}
         self._chains: dict[str, OptionChainSnapshot] = {}
         self._option_heroes: dict[str, OptionHeroSnapshot] = {}
+        self._scalps: dict[str, ScalpSnapshot] = {}
         self._convictions: dict[str, ConvictionSnapshot] = {}
         self._kite_connected = False
         self._nav_buttons: list[QPushButton] = []
@@ -102,16 +105,19 @@ class MainWindow(QMainWindow):
         self._option_tables: dict[str, QTableWidget] = {}
         self._option_summaries: dict[str, QLabel] = {}
         self._option_hero_cards: dict[str, QLabel] = {}
+        self._scalp_cards: dict[str, QLabel] = {}
         self._signals.snapshot.connect(self.update_snapshot)
         self._signals.analysis.connect(self.update_analysis)
         self._signals.options.connect(self.update_options)
         self._signals.option_hero.connect(self.update_option_hero)
+        self._signals.scalp.connect(self.update_scalp)
         self._signals.conviction.connect(self.update_conviction)
         self._signals.status.connect(self.update_status)
         application.add_snapshot_listener(self._signals.snapshot.emit)
         application.add_analysis_listener(self._signals.analysis.emit)
         application.add_option_listener(self._signals.options.emit)
         application.add_option_hero_listener(self._signals.option_hero.emit)
+        application.add_scalp_listener(self._signals.scalp.emit)
         application.add_conviction_listener(self._signals.conviction.emit)
         application.add_status_listener(self._signals.status.emit)
         self.setWindowTitle("NICE-PRO | Intraday Conviction Engine")
@@ -294,6 +300,17 @@ class MainWindow(QMainWindow):
         hero_layout.addLayout(hero_row)
         header_row.addWidget(hero_panel, 4)
         layout.addLayout(header_row)
+        scalp_panel, scalp_layout = self._panel("LIVE OPTION SCALPING BOX — PAPER ONLY", "amber")
+        scalp_layout.addWidget(self._muted("Requires aligned 10s/30s timing plus ATM top-five book, estimated CVD, OTM continuation, premium velocity, and an acceptable spread."))
+        scalp_row = QHBoxLayout()
+        for underlying in ("NIFTY", "SENSEX"):
+            scalp = QLabel(f"{underlying}: waiting for live scalp conditions")
+            scalp.setObjectName("scalpBox")
+            scalp.setWordWrap(True)
+            scalp_row.addWidget(scalp)
+            self._scalp_cards[underlying] = scalp
+        scalp_layout.addLayout(scalp_row)
+        layout.addWidget(scalp_panel)
         tabs = QTabWidget()
         tabs.setObjectName("chainTabs")
         for underlying in ("NIFTY", "SENSEX"):
@@ -413,16 +430,25 @@ class MainWindow(QMainWindow):
 
     def _quote_card(self, title: str, key: str) -> dict[str, object]:
         panel, layout = self._panel(title, "blue")
+        content = QHBoxLayout()
+        quote_column = QVBoxLayout()
         value = QLabel("--")
         value.setObjectName("quoteValue")
         state = QLabel("WAITING FOR LIVE QUOTE")
         state.setObjectName("quoteState")
         micro = QLabel("Bid / Ask  — / —")
         micro.setObjectName("micro")
-        layout.addWidget(value)
-        layout.addWidget(state)
-        layout.addWidget(micro)
-        return {"panel": panel, "value": value, "state": state, "micro": micro, "key": key}
+        quote_column.addWidget(value)
+        quote_column.addWidget(state)
+        quote_column.addWidget(micro)
+        content.addLayout(quote_column, 1)
+        matrix = QLabel("5M INDICATOR MATRIX\nWaiting for 5-minute data")
+        matrix.setObjectName("matrixSummary")
+        matrix.setTextFormat(Qt.TextFormat.RichText)
+        matrix.setWordWrap(True)
+        content.addWidget(matrix, 1)
+        layout.addLayout(content)
+        return {"panel": panel, "value": value, "state": state, "micro": micro, "matrix": matrix, "key": key}
 
     def _conviction_card(self, title: str) -> dict[str, object]:
         panel, layout = self._panel(title, "green")
@@ -566,6 +592,9 @@ class MainWindow(QMainWindow):
     def update_analysis(self, analysis: IndicatorSnapshot) -> None:
         underlying = _underlying_for_symbol(analysis.symbol)
         self._analyses.setdefault(underlying, {})[analysis.timeframe_seconds] = analysis
+        if analysis.timeframe_seconds == 300:
+            card = self._nifty_quote if underlying == "NIFTY" else self._sensex_quote
+            card["matrix"].setText(_matrix_summary_html(analysis))  # type: ignore[union-attr]
         self._refresh_analysis_view(underlying)
 
     def update_options(self, chain: OptionChainSnapshot) -> None:
@@ -578,6 +607,12 @@ class MainWindow(QMainWindow):
         card = self._option_hero_cards.get(hero.underlying)
         if card is not None:
             card.setText(_option_hero_html(hero))
+
+    def update_scalp(self, scalp: ScalpSnapshot) -> None:
+        self._scalps[scalp.underlying] = scalp
+        card = self._scalp_cards.get(scalp.underlying)
+        if card is not None:
+            card.setText(_scalp_html(scalp))
 
     def update_conviction(self, snapshot: ConvictionSnapshot) -> None:
         self._convictions[snapshot.underlying] = snapshot
@@ -740,6 +775,40 @@ def _analysis_summary(analysis: IndicatorSnapshot) -> str:
     return f"{analysis.regime} | VWAP {_number(analysis.vwap)} | RSI {_number(analysis.rsi, 0)}"
 
 
+def _matrix_summary_html(analysis: IndicatorSnapshot) -> str:
+    """Show a compact weighted 5-minute indicator audit in the quote card."""
+    category_weights = {
+        "Trend": 20,
+        "Momentum": 20,
+        "Volatility": 15,
+        "Levels": 15,
+        "Volume": 15,
+        "Options & Flow": 15,
+    }
+    rows: list[str] = []
+    bull_total = bear_total = 0.0
+    for category, weight in category_weights.items():
+        readings = [item for item in analysis.readings if item.category == category]
+        count = len(readings)
+        bulls = sum(item.state == "BULLISH" for item in readings)
+        bears = sum(item.state == "BEARISH" for item in readings)
+        bull_weight = weight * bulls / count if count else 0.0
+        bear_weight = weight * bears / count if count else 0.0
+        bull_total += bull_weight
+        bear_total += bear_weight
+        rows.append(
+            f"<span style='color:#a5b4fc'>{category}</span> "
+            f"<span style='color:#4ade80'>B {bulls} (+{bull_weight:.0f})</span> "
+            f"<span style='color:#fb7185'>R {bears} (−{bear_weight:.0f})</span>"
+        )
+    return (
+        "<span style='color:#d8b4fe; font-size:13px; font-weight:900'>5M INDICATOR MATRIX</span><br>"
+        f"<span style='color:#4ade80; font-size:19px; font-weight:900'>BULL {bull_total:.0f}</span> "
+        f"<span style='color:#fb7185; font-size:19px; font-weight:900'>BEAR {bear_total:.0f}</span><br>"
+        + "<br>".join(rows)
+    )
+
+
 def _decision_direction(snapshot: ConvictionSnapshot) -> str:
     if snapshot.side is Side.BUY:
         return "BUY CALL"
@@ -832,6 +901,26 @@ def _option_hero_html(hero: OptionHeroSnapshot) -> str:
         f"<span style='color:{color}; font-size:15px; font-weight:900'>{hero.grade} | {action} | {score}/100</span><br>"
         f"<span style='color:#dce8f6'>Bull {hero.bullish_score} / Bear {hero.bearish_score} | Confidence {hero.confidence}%</span><br>"
         f"<span style='color:#a7f3d0'>{evidence}</span><br>"
+        f"<span style='color:#f5d0fe'>{plan}</span>"
+    )
+
+
+def _scalp_html(scalp: ScalpSnapshot) -> str:
+    action = "BUY CE" if scalp.side is Side.BUY else "BUY PE" if scalp.side is Side.SELL else "WAIT"
+    color = "#67e8a5" if scalp.side is Side.BUY else "#fb7185" if scalp.side is Side.SELL else "#facc15"
+    reasons = "<br>".join(scalp.reasons[:2]) or "Waiting for aligned live scalp evidence"
+    if scalp.plan is None:
+        plan = "No scalp paper setup — timing, liquidity, and microstructure must all align."
+    else:
+        plan = (
+            f"{scalp.plan.option_symbol}<br>"
+            f"LTP/Entry {scalp.plan.entry:.2f} | SL {scalp.plan.stop_loss:.2f} | "
+            f"T1 {scalp.plan.target_1:.2f} | T2 {scalp.plan.target_2:.2f} | Loss/lot ₹{scalp.plan.max_loss_per_lot:,.0f}"
+        )
+    return (
+        f"<b>{scalp.underlying}</b> "
+        f"<span style='color:{color}; font-size:14px; font-weight:900'>{action} | {scalp.score}/100 | Confidence {scalp.confidence}%</span><br>"
+        f"<span style='color:#a7f3d0'>{reasons}</span><br>"
         f"<span style='color:#f5d0fe'>{plan}</span>"
     )
 
@@ -1046,6 +1135,8 @@ QLabel#mtfScoreBadge { background: #102b46; color: #d8b4fe; border: 1px solid #6
 QLabel#timeframeStrip { color: #dce8f6; font-size: 10px; font-weight: 800; padding: 1px 0; }
 QLabel#workspaceReasons, QLabel#workspacePlan, QLabel#chainSummary { color: #dce8f6; font-size: 12px; }
 QLabel#optionHero { color: #dce8f6; font-size: 10px; padding: 3px 7px; border-left: 1px solid #1c5b44; }
+QLabel#scalpBox { color: #dce8f6; font-size: 10px; padding: 4px 8px; border-left: 1px solid #7b5720; }
+QLabel#matrixSummary { color: #dce8f6; font-size: 9px; padding: 3px 7px; border-left: 1px solid #1d4f76; }
 QProgressBar { height: 7px; border: 0; border-radius: 3px; background: #142942; }
 QProgressBar::chunk { border-radius: 3px; background: qlineargradient(x1:0, x2:1, stop:0 #f59e0b, stop:0.55 #b9d43e, stop:1 #22c55e); }
 QLabel#positiveEvidence { color: #62e99a; font-size: 11px; }

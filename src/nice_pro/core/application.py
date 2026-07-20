@@ -17,7 +17,8 @@ from nice_pro.engines.market_data import MarketDataEngine
 from nice_pro.engines.market_state import MarketState
 from nice_pro.engines.options import OptionChainEngine
 from nice_pro.engines.option_hero import OptionHeroEngine
-from nice_pro.models.market import Candle, ConvictionSnapshot, IndicatorSnapshot, MarketSnapshot, OptionChainSnapshot, OptionHeroSnapshot, Quote
+from nice_pro.engines.scalp import ScalpEngine
+from nice_pro.models.market import Candle, ConvictionSnapshot, IndicatorSnapshot, MarketSnapshot, OptionChainSnapshot, OptionHeroSnapshot, Quote, ScalpSnapshot
 from nice_pro.services.kite import KiteService
 
 ANALYSIS_TIMEFRAMES = (10, 30, 60, 300, 900, 1800, 3600)
@@ -33,6 +34,7 @@ class Application:
         self.indicators = IndicatorEngine()
         self.options = OptionChainEngine()
         self.option_hero = OptionHeroEngine()
+        self.scalp = ScalpEngine()
         self.conviction = ConvictionEngine()
         self.alerts = QualityAlertEngine()
         self.kite = KiteService(settings)
@@ -53,6 +55,7 @@ class Application:
         self._analysis_listeners: list[Callable[[IndicatorSnapshot], None]] = []
         self._option_listeners: list[Callable[[OptionChainSnapshot], None]] = []
         self._option_hero_listeners: list[Callable[[OptionHeroSnapshot], None]] = []
+        self._scalp_listeners: list[Callable[[ScalpSnapshot], None]] = []
         self._conviction_listeners: list[Callable[[ConvictionSnapshot], None]] = []
         self._status_listeners: list[Callable[[str], None]] = []
 
@@ -67,6 +70,9 @@ class Application:
 
     def add_option_hero_listener(self, listener: Callable[[OptionHeroSnapshot], None]) -> None:
         self._option_hero_listeners.append(listener)
+
+    def add_scalp_listener(self, listener: Callable[[ScalpSnapshot], None]) -> None:
+        self._scalp_listeners.append(listener)
 
     def add_conviction_listener(self, listener: Callable[[ConvictionSnapshot], None]) -> None:
         self._conviction_listeners.append(listener)
@@ -240,6 +246,9 @@ class Application:
         hero = self.option_hero.evaluate(snapshot)
         for listener in tuple(self._option_hero_listeners):
             listener(hero)
+        scalp = self.scalp.evaluate(snapshot, self._analysis_by_underlying.get(snapshot.underlying, {}))
+        for listener in tuple(self._scalp_listeners):
+            listener(scalp)
         self._evaluate_conviction(snapshot.underlying)
 
     def _evaluate_conviction(self, underlying: str) -> None:

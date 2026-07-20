@@ -55,6 +55,12 @@ At startup NICE-PRO discovers and subscribes to the nearest current-month NIFTY 
 
 The Options page includes separate NIFTY and SENSEX **Hero** boxes. They use only nearest-expiry chain inputs: PCR, total and changing call/put OI, ATM IV skew, straddle, expected move, direct bid-ask spread, top-five book imbalance, estimated CVD, and derived OTM continuation. Its directional score is a true 100-point budget: PCR 20, total OI 7, OI change 13, IV skew 12, book imbalance 17, estimated CVD 17, and OTM continuation 14. A Hero plan is strictly paper-only and appears only for an A/A+ option-chain grade with a live ATM quote and risk inside the per-lot cap. Confidence measures the coverage and agreement of the live chain evidence; it is not a probability of profit. The Hero model does not use price-action or multi-timeframe evidence and is not a trading guarantee.
 
+### Indicator matrix summary and scalp box
+
+The dashboard quote cards show a compact, **5-minute indicator-matrix audit**. It counts bullish and bearish readings within Trend (20 points), Momentum (20), Volatility (15), Levels (15), Volume (15), and Options & Flow (15). A category's points are proportional to the number of its rows currently classified bullish or bearish; neutral, informational, and missing-data rows do not create a vote.
+
+The Options page also contains a separate **Scalping Box** for each index. Its 100-point paper-only framework requires: 10s/30s directional alignment (30), direct top-five ATM book imbalance (25), estimated CVD (20), OTM continuation (15), and ATM premium-velocity leadership (10). An acceptable ATM spread is an execution-quality gate. A scalp plan needs a score of at least 70, confidence of at least 65, no unresolved data conflicts, a live ATM quote, and risk within the configured per-lot cap. Stops are 8% of premium, with targets at 1.08× and 1.15× entry; these are configurable model parameters, not guarantees.
+
 The timeframe weights are deliberately category-level safeguards, not a claim that all 100 indicator rows are independent votes. They must be validated with paper-trade and historical results before being relied on. NICE-PRO contains no order-placement API. A trade plan is a paper-only candidate and is never an instruction or guarantee.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ROADMAP.md](docs/ROADMAP.md).
