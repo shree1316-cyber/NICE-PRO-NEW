@@ -158,7 +158,7 @@ _CATALOG: tuple[tuple[str, str], ...] = (
     *(("Volatility", name) for name in ("ATR 7", "ATR 14", "Bollinger Upper", "Bollinger Mid", "Bollinger Lower", "Bollinger Width", "Donchian Upper", "Donchian Mid", "Donchian Lower", "Keltner Upper", "Keltner Mid", "Keltner Lower", "Std Dev 20", "High-Low Range", "ATR Percent")),
     *(("Levels", name) for name in ("Session VWAP", "Opening Range High", "Opening Range Low", "Opening Range Position", "Session High", "Session Low", "Session Range", "Session Change", "Pivot", "R1", "S1", "Previous Close", "Price vs VWAP", "Price vs Pivot", "Close Location in Range")),
     *(("Volume", name) for name in ("Relative Volume", "Current Bar Volume", "Session Volume", "Volume SMA 20", "Volume Spike", "OBV", "CMF 20", "MFI 14", "VWAP Volume Basis", "Volume ROC", "Accumulation/Distribution", "Price Volume Trend", "Ease of Movement", "Force Index", "Chaikin Oscillator")),
-    *(("Options & Flow", name) for name in ("PCR (OI)", "Call OI", "Put OI", "Session Call OI Delta", "Session Put OI Delta", "ATM IV", "IV Skew", "Expected Move", "Observed Max Pain", "ATM CE Premium Velocity", "ATM PE Premium Velocity", "Bid-Ask Spread", "ATM Book Imbalance", "Estimated CVD", "OTM Continuation")),
+    *(("Options & Flow", name) for name in ("PCR (OI)", "Call OI", "Put OI", "Session Call OI Delta", "Session Put OI Delta", "ATM IV", "IV Skew", "Expected Move", "Nearest-expiry Max Pain", "ATM CE Premium Velocity", "ATM PE Premium Velocity", "Bid-Ask Spread", "ATM Book Imbalance", "Estimated CVD", "OTM Continuation")),
 )
 
 

@@ -20,7 +20,7 @@ NIFTY & SENSEX Intraday Conviction Engine — a transparent, paper-trading-first
 5. Copy `.env.example` to `.env`; credentials are optional for offline dashboard mode.
 6. Add valid Kite credentials to receive live data. Never commit `.env`.
 7. Verify the instrument tokens in `NICE_SUBSCRIPTIONS` against Kite's current instrument master before every market session.
-8. Adjust `NICE_OPTION_STRIKES_EACH_SIDE` only when needed. The default `5` subscribes to the ATM strike plus five strikes on each side, for CE and PE contracts.
+8. The default `NICE_OPTION_CHAIN_SCOPE=full_current_expiry` subscribes to every listed CE and PE strike in the nearest active expiry. Set it to `atm_window` only for a lower-bandwidth diagnostic window; then `NICE_OPTION_STRIKES_EACH_SIDE` controls the ATM range.
 9. Run `python -m nice_pro`.
 
 Run the checks with `python -m pytest`. See [Run NICE-PRO](docs/RUN_NICE_PRO.md) for the Windows step-by-step guide.
@@ -29,7 +29,9 @@ Run the checks with `python -m pytest`. See [Run NICE-PRO](docs/RUN_NICE_PRO.md)
 
 `Kite service → Event bus → Market state → Analysis engines → Dashboard`
 
-The app streams only explicitly subscribed market data. The option-chain page labels its Max Pain and similar figures as **observed** because the calculation uses subscribed strikes rather than every exchange strike.
+The app streams only explicitly subscribed market data. By default it subscribes to the **complete nearest-expiry NIFTY and SENSEX CE/PE chains**, so PCR, Max Pain, IV skew, and option metrics cover every listed strike in that expiry once their initial quotes arrive. Later weekly/monthly expiries are intentionally separate chains. A Kite WebSocket connection accepts at most 3,000 instruments, and NICE-PRO stops with an explicit status message rather than silently showing partial data if that limit would be exceeded.
+
+For desktop responsiveness, NICE-PRO retains every live option tick but recalculates and repaints the complete-chain table once per second. The small `atm_window` diagnostic mode refreshes its compact table up to four times per second.
 
 ### Multi-timeframe paper-plan gate
 

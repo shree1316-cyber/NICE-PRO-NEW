@@ -273,8 +273,8 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
-        heading, heading_layout = self._panel("LIVE OPTION CHAIN — OBSERVED STRIKES", "purple")
-        heading_layout.addWidget(self._muted("Live LTP, OI, session OI delta, model IV and premium velocity. Values use the currently subscribed ATM range; no order is submitted."))
+        heading, heading_layout = self._panel("LIVE OPTION CHAIN — COMPLETE NEAREST EXPIRY", "purple")
+        heading_layout.addWidget(self._muted("Live LTP, OI, session OI delta, model IV and premium velocity for every subscribed CE/PE strike in the nearest expiry. Later expiries are separate chains; no order is submitted."))
         layout.addWidget(heading)
         tabs = QTabWidget()
         tabs.setObjectName("chainTabs")
@@ -769,10 +769,10 @@ def _option_summary_html(chain: OptionChainSnapshot) -> str:
     return "<br>".join((
         f"ATM strike: <b>{_number(chain.atm_strike, 0)}</b>",
         f"PCR (OI): <b>{_number(chain.put_call_ratio_oi, 2)}</b>",
-        f"Observed max pain: <b>{_number(chain.observed_max_pain, 0)}</b>",
+        f"Nearest-expiry max pain: <b>{_number(chain.observed_max_pain, 0)}</b>",
         f"ATM IV skew (Put − Call): <b>{_signed(chain.iv_skew, '%')}</b>",
         f"ATM straddle / expected move: <b>{_number(chain.expected_move)}</b>",
-        "<span style='color:#facc15'>Observed subscribed strikes only; not a full-exchange chain.</span>",
+        "<span style='color:#67e8a5'>Complete nearest-expiry chain when all contracts receive a quote; later expiries are excluded.</span>",
     ))
 
 
@@ -914,7 +914,7 @@ def _option_indicator_overrides(chain: OptionChainSnapshot) -> dict[str, tuple[s
         "ATM IV": (_number(sum(atm_ivs) / len(atm_ivs) if atm_ivs else None, 1, "%"), "INFO", "Model-implied volatility from observed ATM options"),
         "IV Skew": (_signed(chain.iv_skew, "%"), "BULLISH" if chain.iv_skew is not None and chain.iv_skew < 0 else "BEARISH" if chain.iv_skew is not None and chain.iv_skew > 0 else "NEUTRAL", "ATM put IV minus ATM call IV"),
         "Expected Move": (_number(chain.expected_move), "INFO", "Observed ATM CE + PE premium, not a forecast"),
-        "Observed Max Pain": (_number(chain.observed_max_pain, 0), "INFO", "Computed from subscribed strikes only"),
+        "Nearest-expiry Max Pain": (_number(chain.observed_max_pain, 0), "INFO", "Computed from every available strike in NICE-PRO's nearest-expiry chain"),
         "ATM CE Premium Velocity": (_signed(call_velocity), "BULLISH" if call_velocity is not None and call_velocity > 0 else "BEARISH" if call_velocity is not None and call_velocity < 0 else "NEUTRAL", "Observed ATM call premium change per second"),
         "ATM PE Premium Velocity": (_signed(put_velocity), "BEARISH" if put_velocity is not None and put_velocity > 0 else "BULLISH" if put_velocity is not None and put_velocity < 0 else "NEUTRAL", "Observed ATM put premium change per second"),
     }

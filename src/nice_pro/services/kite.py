@@ -16,12 +16,16 @@ StatusCallback = Callable[[str], None]
 
 
 class KiteService:
+    MAX_WEBSOCKET_SUBSCRIPTIONS = 3000
+
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._client: KiteConnect | None = None
         self._ticker: KiteTicker | None = None
         self._symbols: dict[int, str] = {}
         self._symbols_lock = RLock()
+        self._instrument_cache: dict[str, list[dict[str, object]]] = {}
+        self._instrument_lock = RLock()
 
     @property
     def configured(self) -> bool:
@@ -87,7 +91,7 @@ class KiteService:
         today = date.today()
         records = [
             item
-            for item in self.client().instruments(exchange)
+            for item in self._instruments(exchange)
             if item.get("name") == underlying
             and item.get("instrument_type") in {OptionType.CALL.value, OptionType.PUT.value}
             and item.get("expiry")
@@ -118,6 +122,42 @@ class KiteService:
             )
         return contracts
 
+    def current_expiry_option_contracts(self, underlying: str) -> list[OptionContract]:
+        """Return every listed CE and PE strike for the nearest active expiry.
+
+        This is the complete chain for one expiry available through Kite's
+        instrument master. Later expiries are deliberately excluded because
+        they are separate option chains and could exceed Kite's 3,000-token
+        WebSocket subscription limit.
+        """
+        exchange = "NFO" if underlying == "NIFTY" else "BFO"
+        today = date.today()
+        records = [
+            item
+            for item in self._instruments(exchange)
+            if item.get("name") == underlying
+            and item.get("instrument_type") in {OptionType.CALL.value, OptionType.PUT.value}
+            and item.get("expiry")
+            and item["expiry"] >= today
+        ]
+        if not records:
+            return []
+        expiry = min(item["expiry"] for item in records)
+        contracts = [
+            OptionContract(
+                instrument_token=int(item["instrument_token"]),
+                symbol=f"{exchange}:{item['tradingsymbol']}",
+                underlying=underlying,
+                expiry=item["expiry"],
+                strike=float(item["strike"]),
+                option_type=OptionType(str(item["instrument_type"])),
+                lot_size=int(item.get("lot_size") or 1),
+            )
+            for item in records
+            if item["expiry"] == expiry
+        ]
+        return sorted(contracts, key=lambda contract: (contract.strike, contract.option_type))
+
     def nearest_future_subscription(self, underlying: str) -> Subscription | None:
         """Discover the nearest current-month index future from Kite's master.
 
@@ -128,7 +168,7 @@ class KiteService:
         today = date.today()
         records = [
             item
-            for item in self.client().instruments(exchange)
+            for item in self._instruments(exchange)
             if item.get("name") == underlying
             and item.get("instrument_type") == "FUT"
             and item.get("expiry")
@@ -225,13 +265,36 @@ class KiteService:
         """Dynamically subscribe discovered option or futures contracts."""
         if self._ticker is None:
             raise RuntimeError("Start the spot stream before adding option subscriptions.")
+        self.require_subscription_capacity(contracts)
         with self._symbols_lock:
             new_tokens = [contract.instrument_token for contract in contracts if contract.instrument_token not in self._symbols]
             self._symbols.update({contract.instrument_token: contract.symbol for contract in contracts})
         if new_tokens:
             self._ticker.subscribe(new_tokens)
             self._ticker.set_mode(self._ticker.MODE_FULL, new_tokens)
-            logger.info("Subscribed to {} option contracts.", len(new_tokens))
+            logger.info("Subscribed to {} additional market-data instruments.", len(new_tokens))
+
+    def require_subscription_capacity(self, contracts: Sequence[OptionContract | Subscription]) -> None:
+        """Fail before registering a partial chain when Kite's token cap is reached."""
+        with self._symbols_lock:
+            new_tokens = {contract.instrument_token for contract in contracts if contract.instrument_token not in self._symbols}
+            available = self.MAX_WEBSOCKET_SUBSCRIPTIONS - len(self._symbols)
+        if len(new_tokens) > available:
+            raise RuntimeError(
+                f"Kite WebSocket capacity exceeded: need {len(new_tokens)} additional instruments, "
+                f"but only {available} of {self.MAX_WEBSOCKET_SUBSCRIPTIONS} slots remain."
+            )
+
+    def _instruments(self, exchange: str) -> list[dict[str, object]]:
+        """Load one instrument-master copy per exchange for this application run."""
+        with self._instrument_lock:
+            cached = self._instrument_cache.get(exchange)
+            if cached is not None:
+                return cached
+        instruments = self.client().instruments(exchange)
+        with self._instrument_lock:
+            self._instrument_cache[exchange] = instruments
+        return instruments
 
     def stop_stream(self) -> None:
         if self._ticker is not None:

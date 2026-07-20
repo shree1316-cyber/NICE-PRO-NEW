@@ -38,7 +38,12 @@ class Application:
         self._options_by_underlying: dict[str, OptionChainSnapshot] = {}
         self._option_lock = RLock()
         self._last_option_publish: dict[str, float] = {}
-        self._option_publish_interval_seconds = 0.25
+        # A complete nearest-expiry chain can contain hundreds of contracts.
+        # Ticks are retained at full stream speed, while the expensive chain
+        # analytics and table repaint are intentionally sampled at 1 Hz.
+        self._option_publish_interval_seconds = (
+            0.25 if settings.option_chain_scope == "atm_window" else 1.0
+        )
         self._futures_by_token: dict[int, str] = {}
         self._future_symbols: dict[str, str] = {}
         self._spot_symbols = {"NIFTY": "NSE:NIFTY 50", "SENSEX": "BSE:SENSEX"}
@@ -70,7 +75,7 @@ class Application:
             self.kite.start_stream(self.settings.subscriptions, self.process_quote, self.publish_status)
             Thread(target=self._seed_history, name="candle-history-seed", daemon=True).start()
             Thread(target=self._discover_futures, name="futures-volume-feed", daemon=True).start()
-            Thread(target=self._discover_atm_options, name="option-universe", daemon=True).start()
+            Thread(target=self._discover_option_chain, name="option-universe", daemon=True).start()
         else:
             self.publish_status("Kite credentials not configured — dashboard is in offline mode")
 
@@ -155,7 +160,7 @@ class Application:
                 logger.exception("Futures volume proxy setup failed for {}", underlying)
                 self.publish_status(f"futures volume proxy failed for {underlying}: {error}")
 
-    def _discover_atm_options(self) -> None:
+    def _discover_option_chain(self) -> None:
         for subscription in self.settings.subscriptions:
             underlying = "NIFTY" if "NIFTY" in subscription.symbol else "SENSEX"
             for _ in range(30):
@@ -167,15 +172,25 @@ class Application:
                 self.publish_status(f"option discovery skipped for {underlying}: no spot quote")
                 continue
             try:
-                contracts = self.kite.nearest_option_contracts(
-                    underlying, spot, strikes_each_side=self.settings.option_strikes_each_side
-                )
+                if self.settings.option_chain_scope == "atm_window":
+                    contracts = self.kite.nearest_option_contracts(
+                        underlying, spot, strikes_each_side=self.settings.option_strikes_each_side
+                    )
+                    coverage = "ATM observation window"
+                else:
+                    contracts = self.kite.current_expiry_option_contracts(underlying)
+                    coverage = "complete nearest-expiry chain"
                 if not contracts:
                     self.publish_status(f"no current {underlying} option contracts found")
                     continue
+                # Check before registering any contracts. This avoids a chain
+                # being displayed as complete if Kite cannot stream all of it.
+                self.kite.require_subscription_capacity(contracts)
                 with self._option_lock:
                     self.options.register(contracts)
                 self.kite.add_subscriptions(contracts)
+                self.publish_status(f"{underlying} {coverage} subscribed: {len(contracts)} CE/PE contracts")
+                logger.info("{} {} subscribed: {} contracts", underlying, coverage, len(contracts))
                 with self._option_lock:
                     chain = self.options.snapshot(underlying, spot)
                 self._publish_option(chain)

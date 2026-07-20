@@ -95,11 +95,10 @@ def _as_aware_utc(value: datetime) -> datetime:
 
 
 def _observed_max_pain(metrics: tuple[OptionMetric, ...], strikes: list[float]) -> float | None:
-    """Approximate max pain using only strikes that NICE-PRO subscribes to.
+    """Calculate max pain from the contracts presently held in the chain.
 
-    A full-exchange max-pain figure needs OI at every strike. This function is
-    intentionally scoped to observed contracts so it cannot silently imply
-    exchange-wide coverage.
+    In full-current-expiry mode this covers every subscribed CE/PE strike for
+    the nearest expiry. It is not an all-expiries exchange metric.
     """
     if not strikes or not metrics:
         return None
