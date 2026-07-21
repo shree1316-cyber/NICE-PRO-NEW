@@ -181,15 +181,24 @@ def _side(bullish: int, bearish: int) -> Side:
 
 
 def _grade(side: Side, directional: int, conflicts: int) -> TradeGrade:
+    """Map the directional evidence budget to an auditable trade grade.
+
+    ``directional`` is the stronger of the bullish and bearish evidence totals,
+    on a 0--100 budget.  Missing or unresolved chain inputs cannot turn a weak
+    score into an A/A+ grade: they downgrade the two highest grades, while the
+    side test continues to prevent a mixed chain from being called directional.
+    """
     if side is Side.NEUTRAL:
         return TradeGrade.AVOID
-    if directional >= 55 and conflicts <= 1:
+    if directional >= 80 and conflicts <= 1:
         return TradeGrade.A_PLUS
-    if directional >= 40 and conflicts <= 2:
+    if directional >= 65 and conflicts <= 2:
         return TradeGrade.A
-    if directional >= 25:
+    if directional >= 45:
         return TradeGrade.B
-    return TradeGrade.C
+    if directional >= 25:
+        return TradeGrade.C
+    return TradeGrade.AVOID
 
 
 def _confidence(bullish: int, bearish: int, conflicts: int) -> int:

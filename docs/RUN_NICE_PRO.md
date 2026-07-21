@@ -44,7 +44,7 @@ Before a live session, confirm `NICE_SUBSCRIPTIONS` tokens against Kite's latest
 
 Expected offline result: the NICE-PRO desktop window opens with cards for NIFTY, SENSEX, market structure, options, and conviction. It shows that Kite credentials are not configured.
 
-Expected live result: after valid credentials and a live market are available, it connects to Kite, warms recent one-minute history, discovers a narrow ATM option universe, and updates the cards. It never submits an order.
+Expected live result: after valid credentials and a live market are available, it connects to Kite, warms recent one-minute history, discovers the complete nearest-expiry NIFTY and SENSEX option chains (within Kite's subscription limit), and updates the cards. It never submits an order.
 
 ## 6. Verify the code
 
@@ -68,6 +68,48 @@ only if it has positive average R and profit factor of at least 1.0 in both the
 70% training segment and untouched 30% test segment, with at least 50 trades in
 each. It does not change dashboard weights or place trades. Keep the candidate
 in paper mode for at least 10 trading sessions before considering any change.
+
+## 8. Controlled 10-session forward-paper test
+
+The default `.env.example` enables `NIFTY_CORE_308D_V1`. It is still strictly
+paper-only and is eligible for **NIFTY only**, because the selected 308-session
+candidate was validated on NIFTY. SENSEX continues to be journaled but will not
+open a controlled forward-paper position until it has its own validated
+candidate. The policy requires a fresh completed 5-minute decision, MTF score
+of 65 or higher, grade A/A+, a 15-minute cooldown after a close, and no more
+than three entries per IST day. It stops opening new entries after 14:45 IST
+and force-closes a still-active paper position at 15:20 IST when a fresh option
+quote is available.
+
+The **Journal** table displays IST. Its SQLite timestamps remain stored in UTC
+so research exports can be compared consistently. The **Reports** page filters
+to the forward-policy source, ignores older legacy paper records, and shows the
+number of observed sessions out of ten. A Target 1 win is credited at Target 1
+even if the next received tick is higher; a stop is recorded at the observed
+worse price if it gaps through the planned stop.
+
+To pause new forward-test entries without changing any code, set this in your
+local `.env` and restart NICE-PRO:
+
+```ini
+NICE_FORWARD_TEST_ENABLED=false
+```
+
+## Hero score interpretation
+
+The Options page has a separate, paper-only **Full-chain Hero Conviction** box.
+It uses live nearest-expiry option-chain evidence rather than the candle-only
+core backtest. Its directional-evidence score is normalized from 0 to 100:
+
+- **A+:** 80--100, with no more than one unresolved chain conflict.
+- **A:** 65--79, with no more than two unresolved chain conflicts.
+- **B:** 45--64.
+- **C:** 25--44.
+- **Avoid:** below 25 or conflicting bullish/bearish chain evidence.
+
+This is an explainable score of the live data currently observed; it is not a
+profit probability, a prediction, or a guarantee. Any displayed Hero plan is
+paper-only and is never submitted to Zerodha.
 
 ## Troubleshooting
 

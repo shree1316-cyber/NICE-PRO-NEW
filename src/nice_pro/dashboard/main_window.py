@@ -37,6 +37,7 @@ from nice_pro.models.market import (
     Quote,
     ScalpSnapshot,
     Side,
+    TradePlan,
 )
 
 if TYPE_CHECKING:
@@ -379,14 +380,21 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
         for underlying in ("NIFTY", "SENSEX"):
-            panel, panel_layout = self._panel(f"{underlying} PAPER-TRADE PLAN", "purple")
-            detail = QLabel("No paper setup yet")
-            detail.setObjectName("workspacePlan")
-            detail.setWordWrap(True)
-            panel_layout.addWidget(detail)
+            panel, panel_layout = self._panel(f"{underlying} PAPER-FORWARD PLAN", "purple")
+            active = QLabel("NO ACTIVE FORWARD PAPER POSITION")
+            active.setObjectName("workspacePlan")
+            active.setWordWrap(True)
+            candidate = self._muted("Current qualified candidate: waiting for a completed 5-minute decision.")
+            policy = self._muted("Forward policy: loading")
+            panel_layout.addWidget(active)
+            panel_layout.addWidget(candidate)
+            panel_layout.addWidget(policy)
             panel_layout.addStretch()
             layout.addWidget(panel)
-            self._analysis_views.setdefault(underlying, {})["paper"] = detail
+            view = self._analysis_views.setdefault(underlying, {})
+            view["paper"] = candidate
+            view["paper_active"] = active
+            view["paper_policy"] = policy
         return page
 
     def _journal_page(self) -> QWidget:
@@ -400,12 +408,12 @@ class MainWindow(QMainWindow):
             "Every completed 5-minute core candle is saved locally with all timeframe readings, the 100-indicator matrix, full nearest-expiry chain metrics, Hero/Scalp evidence, filters, conflicts and paper-plan context."
         )
         overview_layout.addWidget(self._journal_overview)
-        overview_layout.addWidget(self._muted("These records preserve what the engine knew at the time; they are designed for later reverse-engineering, not hindsight scoring."))
+        overview_layout.addWidget(self._muted("Times are displayed in IST; raw records remain stored in UTC for consistent research. These records preserve what the engine knew at the time, not hindsight scoring."))
         layout.addWidget(overview)
         table_panel, table_layout = self._panel("LATEST DECISION RECORDS", "blue")
         self._journal_table = QTableWidget(0, 8)
         self._journal_table.setObjectName("journalTable")
-        self._journal_table.setHorizontalHeaderLabels(("TIME (UTC)", "MARKET", "SIDE", "GRADE", "MTF", "ALIGNMENT", "5M BULL", "5M BEAR"))
+        self._journal_table.setHorizontalHeaderLabels(("TIME (IST)", "MARKET", "SIDE", "GRADE", "MTF", "ALIGNMENT", "5M BULL", "5M BEAR"))
         self._journal_table.verticalHeader().setVisible(False)
         self._journal_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._journal_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
@@ -421,12 +429,16 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
-        summary, summary_layout = self._panel("10-DAY PAPER-TRADE PERFORMANCE", "green")
+        summary, summary_layout = self._panel("10-DAY PAPER-FORWARD PERFORMANCE", "green")
         self._report_summary = QLabel("Collecting paper-trade outcomes")
         self._report_summary.setObjectName("reportSummary")
         self._report_summary.setWordWrap(True)
         summary_layout.addWidget(self._report_summary)
         layout.addWidget(summary)
+        policy, policy_layout = self._panel("FORWARD-TEST POLICY & LIVE PROGRESS", "purple")
+        self._report_policy = self._muted("Forward-test policy loading")
+        policy_layout.addWidget(self._report_policy)
+        layout.addWidget(policy)
         method, method_layout = self._panel("OPTIMISATION & REVERSE-ENGINEERING DATA", "amber")
         method_layout.addWidget(self._muted(
             "For each saved decision, NICE-PRO retains: 10s/30s/1m/5m/15m/30m/1h regimes and readings; category-level matrix states; core and MTF scores; gate/alignment; bullish, bearish and conflict reasons; ATM plan; PCR, OI and OI changes; IV/skew, expected move, spread, book imbalance, estimated CVD, OTM continuation; Hero and Scalp scores."
@@ -727,14 +739,22 @@ class MainWindow(QMainWindow):
         self._refresh_analysis_view(snapshot.underlying)
 
     def _render_dashboard_plan(self, snapshot: ConvictionSnapshot, card: dict[str, object]) -> None:
+        active_plan = self._application.paper_trades.active_plan(snapshot.underlying)
+        if active_plan is not None:
+            card["status"].setText(f"ACTIVE FORWARD PAPER | {active_plan.option_symbol}")  # type: ignore[union-attr]
+            card["detail"].setText(_active_plan_detail(active_plan))  # type: ignore[union-attr]
+            return
         if snapshot.plan is None:
             card["status"].setText("NO PAPER SETUP")  # type: ignore[union-attr]
-            card["detail"].setText("Need A/A+ grade, ATM quote, and risk inside the configured cap.")  # type: ignore[union-attr]
+            card["detail"].setText("Need the forward-test MTF gate, A/A+ grade, ATM quote, and risk inside the configured cap.")  # type: ignore[union-attr]
             return
         plan = snapshot.plan
-        card["status"].setText(f"PAPER ONLY | {plan.option_symbol}")  # type: ignore[union-attr]
-        card["detail"].setText(f"Entry {plan.entry:.2f} | SL {plan.stop_loss:.2f} | T1 {plan.target_1:.2f} | T2 {plan.target_2:.2f}\nMax loss/lot Rs. {plan.max_loss_per_lot:,.0f} | Lot {plan.lot_size}")  # type: ignore[union-attr]
-        self._alert_feed.setText(f"{snapshot.underlying} {snapshot.grade} paper setup\n{plan.option_symbol} | Risk-capped plan available")
+        card["status"].setText(f"QUALIFIED CANDIDATE | {plan.option_symbol}")  # type: ignore[union-attr]
+        card["detail"].setText(
+            f"Entry {plan.entry:.2f} | SL {plan.stop_loss:.2f} | T1 {plan.target_1:.2f} | T2 {plan.target_2:.2f}\n"
+            f"Candidate only: waits for a fresh 5m decision and forward-policy checks. Max loss/lot Rs. {plan.max_loss_per_lot:,.0f} | Lot {plan.lot_size}"
+        )  # type: ignore[union-attr]
+        self._alert_feed.setText(f"{snapshot.underlying} {snapshot.grade} qualified candidate\n{plan.option_symbol} | Forward-policy checks apply")
 
     def _refresh_analysis_view(self, underlying: str) -> None:
         view = self._analysis_views.get(underlying)
@@ -763,7 +783,8 @@ class MainWindow(QMainWindow):
                 "The core is an audit layer; the MTF gate controls paper-plan eligibility."
             )
             view["reasons"].setText(_reason_html(conviction, matrix_bear, matrix_names))
-            plan_text = _plan_html(conviction)
+            active_plan = self._application.paper_trades.active_plan(underlying)
+            plan_text = _active_plan_html(active_plan) if active_plan is not None else _plan_html(conviction)
             view["plan"].setText(plan_text)
             if "paper" in view:
                 view["paper"].setText(plan_text)  # type: ignore[union-attr]
@@ -832,6 +853,42 @@ class MainWindow(QMainWindow):
         if now.time().second() % 5 == 0:
             self._refresh_research_views()
 
+    def _refresh_forward_paper_view(self, underlying: str) -> dict[str, object]:
+        """Keep active paper positions distinct from merely qualified candidates."""
+        status = self._application.forward_policy_status(underlying)
+        view = self._analysis_views.get(underlying, {})
+        active = self._application.paper_trades.active_position(underlying)
+        active_label = view.get("paper_active")
+        policy_label = view.get("paper_policy")
+        if isinstance(active_label, QLabel):
+            if active is None:
+                active_label.setText("NO ACTIVE FORWARD PAPER POSITION")
+            else:
+                opened = active.opened_at.astimezone().strftime("%d %b %I:%M %p")
+                active_label.setText(
+                    f"ACTIVE FORWARD PAPER | {active.plan.option_symbol}\n"
+                    f"Opened {opened} | Entry {active.plan.entry:.2f} | "
+                    f"SL {active.plan.stop_loss:.2f} | T1 {active.plan.target_1:.2f}"
+                )
+        if isinstance(policy_label, QLabel):
+            if not status.get("enabled"):
+                policy_label.setText("Forward policy is disabled; no new forward-test paper trades can open.")
+            elif not status.get("market_eligible"):
+                policy_label.setText(
+                    "No separately validated 308-session candidate is loaded for this market. "
+                    "It remains journaled, but no forward-policy position can open yet."
+                )
+            else:
+                cooldown = status.get("cooldown_until")
+                cooldown_text = cooldown.astimezone().strftime("%I:%M %p") if isinstance(cooldown, datetime) else "ready"
+                policy_label.setText(
+                    f"Policy {status.get('policy_id')}: MTF {status.get('minimum_mtf_score')}+ | "
+                    f"grade {status.get('minimum_grade')}+ | {status.get('cooldown_minutes')}m cooldown | "
+                    f"{status.get('entries_today')}/{status.get('max_trades_per_day')} entries today | "
+                    f"next eligibility {cooldown_text}."
+                )
+        return status
+
     def _refresh_research_views(self) -> None:
         """Refresh local SQLite-derived research widgets without touching Kite."""
         if not hasattr(self, "_journal_table"):
@@ -840,7 +897,7 @@ class MainWindow(QMainWindow):
         self._journal_table.setRowCount(len(decisions))
         for row, decision in enumerate(decisions):
             values = (
-                decision["created_at"].replace("T", " ").replace("+00:00", ""),
+                decision["created_at_ist"],
                 decision["underlying"], decision["side"], decision["grade"],
                 str(decision["mtf_score"]), decision["alignment"],
                 str(decision["core_bull"]), str(decision["core_bear"]),
@@ -852,23 +909,38 @@ class MainWindow(QMainWindow):
                 self._journal_table.setItem(row, column, item)
         self._journal_overview.setText(
             f"{len(decisions)} latest decision snapshots shown. Full raw inputs are stored locally at {self._application.journal.path}. "
-            "A snapshot is created once per completed 5-minute core candle, not per tick."
+            "Times shown here are IST. A snapshot is created once per completed 5-minute core candle, not per tick."
         )
-        report = self._application.journal.performance_summary(10)
+        policy_states = [self._refresh_forward_paper_view(item) for item in ("NIFTY", "SENSEX")]
+        policy = self._application.forward_policy
+        report = self._application.journal.performance_summary(10, source=policy.source)
+        if hasattr(self, "_report_policy"):
+            active_markets = [str(state.get("active_symbol")) for state in policy_states if state.get("active")]
+            self._report_policy.setText(
+                f"Active policy: {policy.policy_id} | Entry window {policy.entry_start:%H:%M}-{policy.entry_end:%H:%M} IST | "
+                f"MTF {policy.minimum_mtf_score}+ | grade {policy.minimum_grade.value}+ | {policy.cooldown_minutes}-minute cooldown | "
+                f"maximum {policy.max_trades_per_day} entries/market/day | force exit {policy.force_exit_time:%H:%M} IST. "
+                f"Validated markets: {', '.join(policy.eligible_underlyings)}. Forward source: {policy.source}. "
+                f"Active positions: {', '.join(active_markets) if active_markets else 'none'}."
+            )
         if report["closed_trades"] == 0:
-            summary = "No closed paper trades yet in the latest 10-day window. Win rate will appear only after paper positions have reached the model stop loss or Target 1."
+            summary = (
+                f"Observed sessions: {report['observed_sessions']}/10 | No closed forward-policy paper trades yet. "
+                "Win rate appears only after a policy position reaches its model stop, Target 1, or an end-of-day exit."
+            )
         else:
             rate = f"{report['win_rate']:.1f}%" if report["win_rate"] is not None else "—"
             average_r = f"{report['average_r']:.2f}R" if report["average_r"] is not None else "—"
             summary = (
-                f"Closed: {report['closed_trades']} | Wins: {report['wins']} | Losses: {report['losses']} | "
-                f"Observed win rate: {rate} | Net P/L per lot: ₹{report['net_pnl_per_lot']:,.0f} | Average: {average_r}"
+                f"Observed sessions: {report['observed_sessions']}/10 | Closed: {report['closed_trades']} | "
+                f"Resolved: {report['resolved_trades']} | Wins: {report['wins']} | Losses: {report['losses']} | "
+                f"Time exits: {report['time_exits']} | Observed win rate: {rate} | Net P/L per lot: ₹{report['net_pnl_per_lot']:,.0f} | Average: {average_r}"
             )
         self._report_summary.setText(summary)
         by_market = report["by_underlying"]
         if by_market:
             self._report_by_market.setText("\n".join(
-                f"{market}: {stats['trades']} closed | {stats['wins']} wins | {stats['losses']} losses | observed win rate {stats['win_rate']:.1f}%"
+                _market_performance_line(market, stats)
                 for market, stats in sorted(by_market.items())
             ))
         else:
@@ -881,6 +953,16 @@ class MainWindow(QMainWindow):
 
 def _underlying_for_symbol(symbol: str) -> str:
     return "NIFTY" if "NIFTY" in symbol else "SENSEX"
+
+
+def _market_performance_line(market: str, stats: dict[str, object]) -> str:
+    win_rate = stats.get("win_rate")
+    rate = f"{float(win_rate):.1f}%" if isinstance(win_rate, (float, int)) else "â€”"
+    return (
+        f"{market}: {stats['trades']} closed across {stats['observed_sessions']} sessions | "
+        f"{stats['wins']} wins | {stats['losses']} losses | {stats['time_exits']} time exits | "
+        f"observed win rate {rate}"
+    )
 
 
 def _price_or_dash(value: float | None) -> str:
@@ -1126,7 +1208,24 @@ def _plan_html(snapshot: ConvictionSnapshot) -> str:
             "Requires 1m/5m alignment, no opposing higher timeframe, A/A+ grade, an ATM quote, and risk inside the configured maximum loss per lot."
         )
     plan = snapshot.plan
-    return f"<b style='color:#d8b4fe'>PAPER ONLY | {plan.option_symbol}</b><br><br>Entry: <b>{plan.entry:.2f}</b><br>Stop loss: <b>{plan.stop_loss:.2f}</b><br>Target 1: <b>{plan.target_1:.2f}</b><br>Target 2: <b>{plan.target_2:.2f}</b><br>Maximum loss / lot: <b>Rs. {plan.max_loss_per_lot:,.0f}</b><br>Lot size: <b>{plan.lot_size}</b><br><br><span style='color:#facc15'>No order is submitted.</span>"
+    return f"<b style='color:#d8b4fe'>QUALIFIED CANDIDATE | {plan.option_symbol}</b><br><br>Entry: <b>{plan.entry:.2f}</b><br>Stop loss: <b>{plan.stop_loss:.2f}</b><br>Target 1: <b>{plan.target_1:.2f}</b><br>Target 2: <b>{plan.target_2:.2f}</b><br>Maximum loss / lot: <b>Rs. {plan.max_loss_per_lot:,.0f}</b><br>Lot size: <b>{plan.lot_size}</b><br><br><span style='color:#facc15'>A fresh completed 5m decision and forward-policy checks are still required. No order is submitted.</span>"
+
+
+def _active_plan_detail(plan: TradePlan) -> str:
+    return (
+        f"Entry {plan.entry:.2f} | SL {plan.stop_loss:.2f} | T1 {plan.target_1:.2f} | T2 {plan.target_2:.2f}\n"
+        f"Forward paper position is active. Max loss/lot Rs. {plan.max_loss_per_lot:,.0f} | Lot {plan.lot_size}"
+    )
+
+
+def _active_plan_html(plan: TradePlan) -> str:
+    return (
+        f"<b style='color:#67e8a5'>ACTIVE FORWARD PAPER | {plan.option_symbol}</b><br><br>"
+        f"Entry: <b>{plan.entry:.2f}</b><br>Stop loss: <b>{plan.stop_loss:.2f}</b><br>"
+        f"Target 1: <b>{plan.target_1:.2f}</b><br>Target 2: <b>{plan.target_2:.2f}</b><br>"
+        f"Maximum loss / lot: <b>Rs. {plan.max_loss_per_lot:,.0f}</b><br>Lot size: <b>{plan.lot_size}</b><br><br>"
+        "<span style='color:#facc15'>Paper-only position; no broker order exists.</span>"
+    )
 
 
 def _number(value: float | None, decimals: int = 2, suffix: str = "") -> str:

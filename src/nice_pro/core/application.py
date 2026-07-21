@@ -20,6 +20,7 @@ from nice_pro.engines.option_hero import OptionHeroEngine
 from nice_pro.engines.scalp import ScalpEngine
 from nice_pro.journal.store import ResearchJournal
 from nice_pro.models.market import Candle, ConvictionSnapshot, IndicatorSnapshot, MarketSnapshot, OptionChainSnapshot, OptionHeroSnapshot, Quote, ScalpSnapshot
+from nice_pro.papertrade.policy import ForwardTestPolicy
 from nice_pro.papertrade.tracker import PaperTradeTracker
 from nice_pro.services.kite import KiteService
 
@@ -39,7 +40,11 @@ class Application:
         self.scalp = ScalpEngine()
         self.conviction = ConvictionEngine()
         self.journal = ResearchJournal(settings.journal_database_path)
-        self.paper_trades = PaperTradeTracker(self.journal)
+        self.forward_policy = ForwardTestPolicy(
+            policy_id=settings.forward_test_policy_id,
+            enabled=settings.forward_test_enabled,
+        )
+        self.paper_trades = PaperTradeTracker(self.journal, self.forward_policy)
         self.alerts = QualityAlertEngine()
         self.kite = KiteService(settings)
         self._analysis_by_underlying: dict[str, dict[int, IndicatorSnapshot]] = {}
@@ -87,6 +92,12 @@ class Application:
 
     def start(self) -> None:
         logger.info("Application started (paper trading only: {}).", self.settings.paper_trading_only)
+        if self.forward_policy.enabled:
+            self.publish_status(
+                "forward policy active: MTF 65+, A/A+, 15-minute cooldown, 3 entries/day"
+            )
+        else:
+            self.publish_status("forward policy disabled; paper entries will not be opened")
         if self.settings.kite_configured:
             self.publish_status("starting Kite market-data services")
             self.kite.start_stream(self.settings.subscriptions, self.process_quote, self.publish_status)
@@ -99,6 +110,10 @@ class Application:
     def stop(self) -> None:
         self.kite.stop_stream()
         logger.info("Application stopped.")
+
+    def forward_policy_status(self, underlying: str) -> dict[str, object]:
+        """Return paper-forward controls for an honest dashboard explanation."""
+        return self.paper_trades.policy_status(underlying)
 
     def process_quote(self, quote: Quote) -> None:
         future_underlying = self._futures_by_token.get(quote.instrument_token)
