@@ -23,7 +23,13 @@ class ScalpConfig:
 
 
 class ScalpEngine:
-    """Combines 10s/30s direction with live ATM option execution conditions."""
+    """Conservative short-horizon evidence with timing as the safety gate.
+
+    The score is a raw directional-evidence score, not a probability.  The
+    visible ``side`` becomes neutral whenever option-flow evidence contradicts
+    the aligned 10s/30s timing; this prevents a headline such as ``BUY CE``
+    while timing is explicitly selling.
+    """
 
     def __init__(self, config: ScalpConfig | None = None) -> None:
         self._config = config or ScalpConfig()
@@ -36,13 +42,19 @@ class ScalpEngine:
         reasons: list[str] = []
         conflicts: list[str] = []
         bullish = bearish = 0
+        # Keep short-timeframe timing separate from option-flow direction so
+        # the UI can explain a genuine conflict rather than silently folding
+        # both into a neutral aggregate score.
+        flow_bullish = flow_bearish = 0
+        timing_side = Side.NEUTRAL
         if ten_second is Side.NEUTRAL or thirty_second is Side.NEUTRAL:
             conflicts.append("10s and 30s scalp timing is still warming up")
         elif ten_second is thirty_second:
+            timing_side = ten_second
             if ten_second is Side.BUY:
-                bullish += 30
+                bullish += 40
             else:
-                bearish += 30
+                bearish += 40
             reasons.append(f"10s and 30s timing align {ten_second.lower()}")
         else:
             conflicts.append("10s and 30s timing disagree")
@@ -51,28 +63,34 @@ class ScalpEngine:
         if chain.atm_estimated_cvd is None:
             conflicts.append("Estimated CVD is warming up")
         elif chain.atm_estimated_cvd > 0:
-            bullish += 20
+            bullish += 25
+            flow_bullish += 25
             reasons.append("ATM estimated CVD is positive")
         elif chain.atm_estimated_cvd < 0:
-            bearish += 20
+            bearish += 25
+            flow_bearish += 25
             reasons.append("ATM estimated CVD is negative")
         if chain.otm_continuation is None:
             conflicts.append("OTM continuation is warming up")
         elif chain.otm_continuation > 0:
-            bullish += 15
+            bullish += 20
+            flow_bullish += 20
             reasons.append("OTM call continuation is positive")
         elif chain.otm_continuation < 0:
-            bearish += 15
+            bearish += 20
+            flow_bearish += 20
             reasons.append("OTM put continuation is positive")
 
         call_velocity, put_velocity = _atm_velocities(chain)
         if call_velocity is None or put_velocity is None:
             conflicts.append("ATM premium velocity is warming up")
         elif call_velocity > put_velocity:
-            bullish += 10
+            bullish += 15
+            flow_bullish += 15
             reasons.append("ATM call premium velocity leads")
         elif put_velocity > call_velocity:
-            bearish += 10
+            bearish += 15
+            flow_bearish += 15
             reasons.append("ATM put premium velocity leads")
 
         if chain.atm_bid_ask_spread is None or chain.expected_move is None:
@@ -83,18 +101,33 @@ class ScalpEngine:
         else:
             conflicts.append("ATM spread is wide for a scalp")
 
-        # Add book imbalance after its directional test without obscuring the
-        # simple scoring flow above.
+        # Kite depth supplies available top-five liquidity, but combined
+        # CE/PE book imbalance is not a valid directional order-flow signal.
+        # It remains an execution-quality gate only.
         if chain.atm_book_imbalance is None:
             conflicts.append("ATM top-5 book is not ready")
-        elif chain.atm_book_imbalance >= 0.10:
-            bullish += 25
-            reasons.append("ATM top-5 book is bid-heavy")
-        elif chain.atm_book_imbalance <= -0.10:
-            bearish += 25
-            reasons.append("ATM top-5 book is offer-heavy")
+        else:
+            reasons.append("ATM top-5 depth is available (liquidity check only)")
 
-        side = Side.BUY if bullish - bearish >= 20 else Side.SELL if bearish - bullish >= 20 else Side.NEUTRAL
+        if chain.atm_quote_age_seconds is not None and chain.atm_quote_age_seconds > 10:
+            conflicts.append(f"ATM quote is stale ({chain.atm_quote_age_seconds:.1f}s)")
+
+        raw_side = (
+            Side.BUY
+            if flow_bullish - flow_bearish >= 25
+            else Side.SELL
+            if flow_bearish - flow_bullish >= 25
+            else Side.NEUTRAL
+        )
+        side = raw_side
+        if timing_side is Side.NEUTRAL:
+            side = Side.NEUTRAL
+        elif raw_side is Side.NEUTRAL:
+            conflicts.append("Option-flow evidence does not confirm scalp timing")
+            side = Side.NEUTRAL
+        elif raw_side is not timing_side:
+            conflicts.append("Option-flow bias conflicts with 10s/30s timing")
+            side = Side.NEUTRAL
         score = max(bullish, bearish)
         confidence = max(0, min(100, score - min(30, len(conflicts) * 7)))
         plan = self._plan(chain, side, score, confidence, conflicts)
@@ -107,6 +140,8 @@ class ScalpEngine:
             reasons=tuple(dict.fromkeys(reasons)),
             conflicts=tuple(dict.fromkeys(conflicts)),
             plan=plan,
+            raw_side=raw_side,
+            setup_status="PAPER SETUP ELIGIBLE" if plan is not None else "BLOCKED / WAIT",
         )
 
     def _plan(self, chain: OptionChainSnapshot, side: Side, score: int, confidence: int, conflicts: list[str]) -> TradePlan | None:

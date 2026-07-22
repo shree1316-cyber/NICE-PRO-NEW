@@ -50,8 +50,10 @@ class Application:
         self._analysis_by_underlying: dict[str, dict[int, IndicatorSnapshot]] = {}
         self._options_by_underlying: dict[str, OptionChainSnapshot] = {}
         self._option_lock = RLock()
+        self._journal_lock = RLock()
         self._last_option_publish: dict[str, float] = {}
         self._last_journal_candle: dict[str, object] = {}
+        self._pending_journal_candle: dict[str, object] = {}
         # A complete nearest-expiry chain can contain hundreds of contracts.
         # Ticks are retained at full stream speed, while the expensive chain
         # analytics and table repaint are intentionally sampled at 1 Hz.
@@ -100,7 +102,12 @@ class Application:
             self.publish_status("forward policy disabled; paper entries will not be opened")
         if self.settings.kite_configured:
             self.publish_status("starting Kite market-data services")
-            self.kite.start_stream(self.settings.subscriptions, self.process_quote, self.publish_status)
+            self.kite.start_stream(
+                self.settings.subscriptions,
+                self.process_quote,
+                self.publish_status,
+                self._on_stream_reset,
+            )
             Thread(target=self._seed_history, name="candle-history-seed", daemon=True).start()
             Thread(target=self._discover_futures, name="futures-volume-feed", daemon=True).start()
             Thread(target=self._discover_option_chain, name="option-universe", daemon=True).start()
@@ -115,6 +122,31 @@ class Application:
         """Return paper-forward controls for an honest dashboard explanation."""
         return self.paper_trades.policy_status(underlying)
 
+    def feed_health(self) -> dict[str, object]:
+        """Expose the current stream state without implying feed completeness."""
+        if not self.settings.kite_configured:
+            return {"state": "OFFLINE", "last_tick_age_seconds": None, "reconnect_count": 0}
+        return self.kite.stream_health()
+
+    def data_feed_statuses(self) -> dict[str, str]:
+        """Describe direct, derived, and unavailable feeds for the dashboard."""
+        future_status = "LIVE FUTURES-VOLUME PROXY" if len(self._future_symbols) == 2 else "FUTURES PROXY SUBSCRIBING"
+        chains = tuple(self._options_by_underlying.values())
+        if chains and all(item.atm_book_imbalance is not None for item in chains):
+            book_status = "DIRECT TOP-5 DEPTH (LIQUIDITY CONTEXT)"
+        elif chains:
+            book_status = "TOP-5 DEPTH WARMING UP"
+        else:
+            book_status = "OPTION DEPTH SUBSCRIBING"
+        return {
+            "index_futures": future_status,
+            "option_book": book_status,
+            "derived": "ESTIMATED CVD / OTM FLOW (REBASED AFTER RECONNECT)",
+            "india_vix": "NOT CONNECTED",
+            "market_breadth": "NOT CONNECTED",
+            "global_cues": "NOT CONNECTED",
+        }
+
     def process_quote(self, quote: Quote) -> None:
         future_underlying = self._futures_by_token.get(quote.instrument_token)
         if future_underlying is not None:
@@ -123,7 +155,9 @@ class Application:
             update = self.market_data.process(quote)
             for candle in update.closed_candles:
                 self.history.append(candle)
-                self._publish_analysis(self._spot_symbols[future_underlying], candle.timeframe_seconds)
+                self._publish_analysis(
+                    self._spot_symbols[future_underlying], candle.timeframe_seconds
+                )
             return
         if self.options.is_option_token(quote.instrument_token):
             chain: OptionChainSnapshot | None = None
@@ -144,7 +178,11 @@ class Application:
             listener(update.snapshot)
         for candle in update.closed_candles:
             self.history.append(candle)
-            self._publish_analysis(candle.symbol, candle.timeframe_seconds)
+            self._publish_analysis(
+                candle.symbol,
+                candle.timeframe_seconds,
+                journal_eligible=candle.timeframe_seconds == 300,
+            )
 
     def publish_status(self, message: str) -> None:
         for listener in tuple(self._status_listeners):
@@ -239,7 +277,9 @@ class Application:
     def _underlying_from_option_symbol(symbol: str) -> str:
         return "NIFTY" if "NIFTY" in symbol else "SENSEX"
 
-    def _publish_analysis(self, symbol: str, timeframe_seconds: int) -> None:
+    def _publish_analysis(
+        self, symbol: str, timeframe_seconds: int, *, journal_eligible: bool = False
+    ) -> None:
         underlying = "NIFTY" if "NIFTY" in symbol else "SENSEX"
         candles = self.history.for_symbol(symbol, timeframe_seconds)
         future_symbol = self._future_symbols.get(underlying)
@@ -255,6 +295,12 @@ class Application:
         self._analysis_by_underlying.setdefault(underlying, {})[timeframe_seconds] = snapshot
         for listener in tuple(self._analysis_listeners):
             listener(snapshot)
+        if journal_eligible and timeframe_seconds == 300:
+            # Only a live, completed spot 5m candle can create a journal event
+            # or open a forward-test position.  History/futures warm-up never
+            # gets treated as a new trading decision.
+            with self._journal_lock:
+                self._pending_journal_candle[underlying] = snapshot.calculated_at
         # Re-assess whenever a timeframe closes.  The engine requires 1m and
         # 5m alignment before it can create a paper plan.
         self._evaluate_conviction(underlying)
@@ -271,6 +317,19 @@ class Application:
             listener(scalp)
         self._evaluate_conviction(snapshot.underlying)
 
+    def _on_stream_reset(self, reason: str) -> None:
+        """Rebase derived option-flow data after a WebSocket interruption."""
+        with self._option_lock:
+            self.options.reset_derived_metrics()
+            self._options_by_underlying.clear()
+            self._last_option_publish.clear()
+        # Do not create a decision from a pre-outage 5-minute candle using
+        # post-reconnect option data.  The next completed live 5-minute candle
+        # will create a fresh research snapshot once the chain has warmed up.
+        with self._journal_lock:
+            self._pending_journal_candle.clear()
+        self.publish_status(f"option-derived metrics rebasing after {reason}")
+
     def _evaluate_conviction(self, underlying: str) -> None:
         analyses = self._analysis_by_underlying.get(underlying, {})
         # Five minutes is the stable core model.  The 1m snapshot remains an
@@ -281,14 +340,20 @@ class Application:
             return
         snapshot = self.conviction.evaluate(analysis, options, analyses)
         decision_id: int | None = None
-        # Save one research-grade decision snapshot for each completed 5-minute
-        # candle.  Writing on every option tick would create duplicate records
-        # without adding useful evidence for later 10-day optimisation.
-        if self._last_journal_candle.get(underlying) != analysis.calculated_at:
-            hero = self.option_hero.evaluate(options)
-            scalp = self.scalp.evaluate(options, analyses)
-            decision_id = self.journal.capture_decision(snapshot, analyses, options, hero, scalp)
-            self._last_journal_candle[underlying] = analysis.calculated_at
+        # Save at most one research-grade decision only for a live completed
+        # 5-minute *spot* candle.  This lock prevents concurrent warm-up,
+        # futures, and option-stream workers from duplicating the same candle.
+        with self._journal_lock:
+            pending = self._pending_journal_candle.get(underlying)
+            if (
+                pending == analysis.calculated_at
+                and self._last_journal_candle.get(underlying) != analysis.calculated_at
+            ):
+                hero = self.option_hero.evaluate(options)
+                scalp = self.scalp.evaluate(options, analyses)
+                decision_id = self.journal.capture_decision(snapshot, analyses, options, hero, scalp)
+                self._last_journal_candle[underlying] = analysis.calculated_at
+                self._pending_journal_candle.pop(underlying, None)
         self.paper_trades.evaluate(snapshot, options, decision_id)
         for listener in tuple(self._conviction_listeners):
             listener(snapshot)

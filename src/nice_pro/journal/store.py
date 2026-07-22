@@ -403,13 +403,19 @@ def _chain_payload(item: OptionChainSnapshot) -> dict[str, Any]:
         "max_pain": item.observed_max_pain, "iv_skew": item.iv_skew, "expected_move": item.expected_move,
         "atm_spread": item.atm_bid_ask_spread, "atm_book_imbalance": item.atm_book_imbalance,
         "estimated_cvd": item.atm_estimated_cvd, "otm_continuation": item.otm_continuation,
+        "registered_contracts": item.registered_contracts,
+        "quoted_contracts": item.quoted_contracts,
+        "fresh_contracts": item.fresh_contracts,
+        "oldest_quote_age_seconds": item.oldest_quote_age_seconds,
+        "atm_quote_age_seconds": item.atm_quote_age_seconds,
         "strikes": [
             {"symbol": metric.contract.symbol, "strike": metric.contract.strike, "type": metric.contract.option_type.value,
              "ltp": metric.last_price, "oi": metric.open_interest, "oi_change": metric.open_interest_change,
              "iv": metric.implied_volatility, "velocity": metric.premium_velocity, "bid": metric.bid, "ask": metric.ask,
-             "top_bid_qty": metric.top_bid_quantity, "top_ask_qty": metric.top_ask_quantity,
-             "depth_bid_qty": metric.bid_depth_quantity, "depth_ask_qty": metric.ask_depth_quantity,
-             "estimated_cvd": metric.estimated_cvd}
+              "top_bid_qty": metric.top_bid_quantity, "top_ask_qty": metric.top_ask_quantity,
+              "depth_bid_qty": metric.bid_depth_quantity, "depth_ask_qty": metric.ask_depth_quantity,
+              "estimated_cvd": metric.estimated_cvd,
+              "quote_received_at": metric.quote_received_at.isoformat() if metric.quote_received_at else None}
             for metric in item.metrics
         ],
     }
@@ -426,5 +432,6 @@ def _hero_payload(item: OptionHeroSnapshot | None) -> dict[str, Any] | None:
 def _scalp_payload(item: ScalpSnapshot | None) -> dict[str, Any] | None:
     if item is None:
         return None
-    return {"side": item.side.value, "score": item.score, "confidence": item.confidence,
+    return {"side": item.side.value, "raw_side": item.raw_side.value, "setup_status": item.setup_status,
+            "score": item.score, "confidence": item.confidence,
             "reasons": list(item.reasons), "conflicts": list(item.conflicts), "plan": _plan_payload(item.plan)}

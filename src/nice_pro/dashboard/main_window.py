@@ -501,9 +501,10 @@ class MainWindow(QMainWindow):
         self._system_status = self._muted("Kite: Connecting\nData: Waiting\nOrder status: Paper mode\nEngine: Active")
         system_layout.addWidget(self._system_status)
         layout.addWidget(system)
-        pending, pending_layout = self._panel("PENDING DATA FEEDS", "purple")
-        pending_layout.addWidget(self._muted("India VIX\nIndex futures\nMarket breadth\nGlobal cues\nBook imbalance"))
-        layout.addWidget(pending)
+        feed_health, feed_health_layout = self._panel("DATA FEED HEALTH", "purple")
+        self._feed_health = self._muted("Stream: connecting\nFutures proxy: subscribing\nOption depth: subscribing")
+        feed_health_layout.addWidget(self._feed_health)
+        layout.addWidget(feed_health)
         notices, notices_layout = self._panel("NOTIFICATIONS", "amber")
         notices_layout.addWidget(self._muted("All recommendations are decision support only. Verify the evidence and risk before acting."))
         layout.addWidget(notices)
@@ -700,15 +701,16 @@ class MainWindow(QMainWindow):
 
     def update_conviction(self, snapshot: ConvictionSnapshot) -> None:
         self._convictions[snapshot.underlying] = snapshot
+        policy_status = self._application.forward_policy_status(snapshot.underlying)
         conviction = self._nifty_conviction if snapshot.underlying == "NIFTY" else self._sensex_conviction
         evidence = self._nifty_evidence if snapshot.underlying == "NIFTY" else self._sensex_evidence
         plan_card = self._nifty_plan if snapshot.underlying == "NIFTY" else self._sensex_plan
-        conviction["headline"].setText(f"{snapshot.grade} | {_decision_direction(snapshot)}")  # type: ignore[union-attr]
+        conviction["headline"].setText(f"MTF DIRECTION: {_decision_direction(snapshot)}")  # type: ignore[union-attr]
         matrix_bull, matrix_bear, matrix_names = _matrix_state_counts(
             self._analyses.get(snapshot.underlying, {}).get(60), self._chains.get(snapshot.underlying)
         )
         conviction["score"].setText(
-            "MTF CONVICTION<br>"
+            "MTF ALIGNMENT SCORE<br>"
             f"{max(snapshot.mtf_bullish_score, snapshot.mtf_bearish_score)} / 100"
         )  # type: ignore[union-attr]
         conviction["timeframes"].setText(_timeframe_strip_html(snapshot))  # type: ignore[union-attr]
@@ -726,7 +728,8 @@ class MainWindow(QMainWindow):
         conviction["gauge"].set_score(gauge_score)  # type: ignore[union-attr]
         conviction["detail"].setText(
             f"{snapshot.mtf_alignment} | Entry: {snapshot.entry_timing} | "
-            f"5m core: {snapshot.bullish_score}/{snapshot.bearish_score} | {_plan_status(snapshot)}"
+            f"5m core audit: {snapshot.grade} {snapshot.bullish_score}/{snapshot.bearish_score} | "
+            f"{_plan_status(snapshot, policy_status)}"
         )  # type: ignore[union-attr]
         evidence["positive"].setText("+ " + ("\n+ ".join(snapshot.bullish_reasons[:3]) or "No bullish evidence"))  # type: ignore[union-attr]
         evidence["negative"].setText("- " + ("\n- ".join(snapshot.bearish_reasons[:3]) or "No bearish evidence"))  # type: ignore[union-attr]
@@ -735,10 +738,12 @@ class MainWindow(QMainWindow):
             matrix_note = f"MATRIX WATCH ({matrix_bear} bearish, not core-score votes): " + ", ".join(matrix_names[:3])
             caution = f"{caution}\n{matrix_note}" if caution else matrix_note
         evidence["caution"].setText(caution)  # type: ignore[union-attr]
-        self._render_dashboard_plan(snapshot, plan_card)
+        self._render_dashboard_plan(snapshot, plan_card, policy_status)
         self._refresh_analysis_view(snapshot.underlying)
 
-    def _render_dashboard_plan(self, snapshot: ConvictionSnapshot, card: dict[str, object]) -> None:
+    def _render_dashboard_plan(
+        self, snapshot: ConvictionSnapshot, card: dict[str, object], policy_status: dict[str, object]
+    ) -> None:
         active_plan = self._application.paper_trades.active_plan(snapshot.underlying)
         if active_plan is not None:
             card["status"].setText(f"ACTIVE FORWARD PAPER | {active_plan.option_symbol}")  # type: ignore[union-attr]
@@ -749,10 +754,19 @@ class MainWindow(QMainWindow):
             card["detail"].setText("Need the forward-test MTF gate, A/A+ grade, ATM quote, and risk inside the configured cap.")  # type: ignore[union-attr]
             return
         plan = snapshot.plan
-        card["status"].setText(f"QUALIFIED CANDIDATE | {plan.option_symbol}")  # type: ignore[union-attr]
+        if not policy_status.get("market_eligible"):
+            card["status"].setText(f"OBSERVATION ONLY | {plan.option_symbol}")  # type: ignore[union-attr]
+            card["detail"].setText(
+                f"Entry {plan.entry:.2f} | SL {plan.stop_loss:.2f} | T1 {plan.target_1:.2f} | T2 {plan.target_2:.2f}\n"
+                "This market is journaled but is not validated for the active forward policy. "
+                "No forward paper position can open."
+            )  # type: ignore[union-attr]
+            return
+        card["status"].setText(f"FORWARD-POLICY CANDIDATE | {plan.option_symbol}")  # type: ignore[union-attr]
         card["detail"].setText(
             f"Entry {plan.entry:.2f} | SL {plan.stop_loss:.2f} | T1 {plan.target_1:.2f} | T2 {plan.target_2:.2f}\n"
-            f"Candidate only: waits for a fresh 5m decision and forward-policy checks. Max loss/lot Rs. {plan.max_loss_per_lot:,.0f} | Lot {plan.lot_size}"
+            f"Candidate only: waits for a fresh completed 5m decision and policy checks. "
+            f"Max loss/lot Rs. {plan.max_loss_per_lot:,.0f} | Lot {plan.lot_size}"
         )  # type: ignore[union-attr]
         self._alert_feed.setText(f"{snapshot.underlying} {snapshot.grade} qualified candidate\n{plan.option_symbol} | Forward-policy checks apply")
 
@@ -777,14 +791,15 @@ class MainWindow(QMainWindow):
             view["option"].setText(_option_summary_html(chain))
         if conviction is not None:
             matrix_bull, matrix_bear, matrix_names = _matrix_state_counts(analysis, chain)
-            view["score"].setText(_conviction_box_html(conviction))
+            policy_status = self._application.forward_policy_status(underlying)
+            view["score"].setText(_conviction_box_html(conviction, policy_status))
             view["score_meta"].setText(
                 f"5m core score: Bull {conviction.bullish_score} / Bear {conviction.bearish_score}. "
                 "The core is an audit layer; the MTF gate controls paper-plan eligibility."
             )
             view["reasons"].setText(_reason_html(conviction, matrix_bear, matrix_names))
             active_plan = self._application.paper_trades.active_plan(underlying)
-            plan_text = _active_plan_html(active_plan) if active_plan is not None else _plan_html(conviction)
+            plan_text = _active_plan_html(active_plan) if active_plan is not None else _plan_html(conviction, policy_status)
             view["plan"].setText(plan_text)
             if "paper" in view:
                 view["paper"].setText(plan_text)  # type: ignore[union-attr]
@@ -850,8 +865,40 @@ class MainWindow(QMainWindow):
         self._clock_label.setText(now.toString("hh:mm:ss AP | ddd, dd MMM"))
         self._session_clock.setText(now.toString("hh:mm:ss AP"))
         self._right_clock.setText(now.toString("hh:mm:ss AP"))
+        self._refresh_feed_health()
         if now.time().second() % 5 == 0:
             self._refresh_research_views()
+
+    def _refresh_feed_health(self) -> None:
+        """Render direct, derived, stale, and unavailable feeds separately."""
+        if not hasattr(self, "_feed_health"):
+            return
+        health = self._application.feed_health()
+        feeds = self._application.data_feed_statuses()
+        age = health.get("last_tick_age_seconds")
+        age_text = f"{float(age):.1f}s" if isinstance(age, (int, float)) else "--"
+        stream_state = str(health.get("state") or "OFFLINE")
+        badge_text = {
+            "LIVE": "KITE LIVE",
+            "CONNECTED": "KITE CONNECTED — WAITING TICKS",
+            "RECONNECTING": "KITE RECONNECTING",
+            "STALE": "KITE STALE",
+            "FAILED": "KITE FAILED",
+            "STOPPED": "KITE STOPPED",
+            "OFFLINE": "DATA STATUS",
+        }.get(stream_state, f"KITE {stream_state}")
+        is_live = stream_state in {"LIVE", "CONNECTED"}
+        self._connection_badge.setText(badge_text)
+        self._connection_badge.setProperty("connected", is_live)
+        self._connection_badge.style().unpolish(self._connection_badge)
+        self._connection_badge.style().polish(self._connection_badge)
+        self._feed_health.setText(
+            f"Stream: {stream_state} | last tick: {age_text} | reconnects: {health.get('reconnect_count', 0)}\n"
+            f"Futures: {feeds['index_futures']}\n"
+            f"Option book: {feeds['option_book']}\n"
+            f"Flow: {feeds['derived']}\n"
+            f"India VIX / breadth / global: NOT CONNECTED"
+        )
 
     def _refresh_forward_paper_view(self, underlying: str) -> dict[str, object]:
         """Keep active paper positions distinct from merely qualified candidates."""
@@ -1015,8 +1062,19 @@ def _decision_direction(snapshot: ConvictionSnapshot) -> str:
     return "WAIT"
 
 
-def _plan_status(snapshot: ConvictionSnapshot) -> str:
-    return "Paper plan allowed" if snapshot.plan is not None else "Paper plan blocked / waiting"
+def _plan_status(
+    snapshot: ConvictionSnapshot, policy_status: dict[str, object] | None = None
+) -> str:
+    """Separate raw model direction from forward-policy eligibility."""
+    if snapshot.plan is None:
+        return "No core paper plan"
+    if policy_status is None:
+        return "Core candidate; policy not assessed"
+    if not policy_status.get("enabled"):
+        return "Core candidate; forward policy disabled"
+    if not policy_status.get("market_eligible"):
+        return "Observation only; market not policy-validated"
+    return "Forward-policy candidate; checks pending"
 
 
 def _timeframe_strip_html(snapshot: ConvictionSnapshot) -> str:
@@ -1035,7 +1093,9 @@ def _timeframe_strip_html(snapshot: ConvictionSnapshot) -> str:
     return "&nbsp;&nbsp;".join(parts)
 
 
-def _conviction_box_html(snapshot: ConvictionSnapshot) -> str:
+def _conviction_box_html(
+    snapshot: ConvictionSnapshot, policy_status: dict[str, object] | None = None
+) -> str:
     """Fast-scan multi-timeframe summary used on the NIFTY/SENSEX workspaces."""
     mtf_score = max(snapshot.mtf_bullish_score, snapshot.mtf_bearish_score)
     conflict = snapshot.conflicts[0] if snapshot.conflicts else "None"
@@ -1043,11 +1103,13 @@ def _conviction_box_html(snapshot: ConvictionSnapshot) -> str:
     action = _decision_direction(snapshot)
     decision_color = "#67e8a5" if snapshot.side is not Side.NEUTRAL else "#facc15"
     return (
-        f"<span style='color:#d8b4fe; font-size:17px; font-weight:900'>MTF CONVICTION: {mtf_score} / 100</span><br>"
+        f"<span style='color:#d8b4fe; font-size:17px; font-weight:900'>MTF ALIGNMENT SCORE: {mtf_score} / 100</span><br>"
         f"<span style='font-size:12px'>{_timeframe_strip_html(snapshot)}</span><br>"
         f"<span>Alignment: <b>{snapshot.mtf_alignment}</b></span><br>"
         f"<span>Entry timing: <b>{snapshot.entry_timing}</b></span><br>"
-        f"<span>Decision: <b style='color:{decision_color}'>{snapshot.grade} | {action} | {_plan_status(snapshot)}</b></span><br>"
+        f"<span>MTF direction: <b style='color:{decision_color}'>{action}</b></span><br>"
+        f"<span>5m core audit: <b>{snapshot.grade} | Bull {snapshot.bullish_score} / Bear {snapshot.bearish_score}</b></span><br>"
+        f"<span>Forward-policy status: <b>{_plan_status(snapshot, policy_status)}</b></span><br>"
         f"<span>Conflict: <b style='color:{conflict_color}'>{conflict}</b></span>"
     )
 
@@ -1066,6 +1128,18 @@ def _indicator_html(analysis: IndicatorSnapshot) -> str:
 
 
 def _option_summary_html(chain: OptionChainSnapshot) -> str:
+    coverage = (
+        f"Nearest expiry coverage: <b>{chain.fresh_contracts}/{chain.registered_contracts} fresh</b> "
+        f"({chain.quoted_contracts} quoted)"
+        if chain.registered_contracts
+        else "Nearest expiry coverage: <b>waiting for contracts</b>"
+    )
+    quote_age = (
+        f"Oldest quote age: <b>{chain.oldest_quote_age_seconds:.1f}s</b> | "
+        f"ATM pair age: <b>{chain.atm_quote_age_seconds:.1f}s</b>"
+        if chain.oldest_quote_age_seconds is not None and chain.atm_quote_age_seconds is not None
+        else "Quote freshness: <b>ATM pair warming up</b>"
+    )
     return "<br>".join((
         f"ATM strike: <b>{_number(chain.atm_strike, 0)}</b>",
         f"PCR (OI): <b>{_number(chain.put_call_ratio_oi, 2)}</b>",
@@ -1076,18 +1150,20 @@ def _option_summary_html(chain: OptionChainSnapshot) -> str:
         f"ATM top-5 book imbalance (direct): <b>{_signed(chain.atm_book_imbalance)}</b>",
         f"ATM estimated CVD: <b>{_number(chain.atm_estimated_cvd, 0)}</b>",
         f"OTM continuation (derived): <b>{_signed(chain.otm_continuation)}</b>",
-        "<span style='color:#67e8a5'>Complete nearest-expiry chain when all contracts receive a quote; later expiries are excluded.</span>",
+        coverage,
+        quote_age,
+        "<span style='color:#67e8a5'>Direct: LTP/OI/bid/ask/top-5 depth. Derived: estimated CVD/OTM continuation. Later expiries are excluded.</span>",
     ))
 
 
 def _option_hero_html(hero: OptionHeroSnapshot) -> str:
-    """Compact paper-only chain conviction card for the Options workspace."""
+    """Compact raw chain-bias card; it never implies executable approval."""
     score = max(hero.bullish_score, hero.bearish_score)
     color = "#67e8a5" if hero.side is Side.BUY else "#fda4af" if hero.side is Side.SELL else "#facc15"
     action = "BUY CALL" if hero.side is Side.BUY else "BUY PUT" if hero.side is Side.SELL else "WAIT"
     evidence = "<br>".join(hero.reasons[:2]) or "Waiting for sufficient chain evidence"
     if hero.plan is None:
-        plan = "Paper setup blocked / waiting"
+        plan = "Chain-only paper setup blocked / waiting"
     else:
         plan = (
             f"{hero.plan.option_symbol}<br>"
@@ -1096,15 +1172,17 @@ def _option_hero_html(hero: OptionHeroSnapshot) -> str:
         )
     return (
         f"<b>{hero.underlying}</b><br>"
-        f"<span style='color:{color}; font-size:15px; font-weight:900'>{hero.grade} | {action} | {score}/100</span><br>"
-        f"<span style='color:#dce8f6'>Bull {hero.bullish_score} / Bear {hero.bearish_score} | Confidence {hero.confidence}%</span><br>"
+        f"<span style='color:{color}; font-size:15px; font-weight:900'>RAW CHAIN BIAS: {hero.grade} | {action} | {score}/100</span><br>"
+        f"<span style='color:#dce8f6'>Bull {hero.bullish_score} / Bear {hero.bearish_score} | Evidence quality {hero.confidence}%</span><br>"
         f"<span style='color:#a7f3d0'>{evidence}</span><br>"
-        f"<span style='color:#f5d0fe'>{plan}</span>"
+        f"<span style='color:#f5d0fe'>{plan}</span><br>"
+        "<span style='color:#94a3b8'>Chain-only evidence; not forward-policy validation or a probability of profit.</span>"
     )
 
 
 def _scalp_html(scalp: ScalpSnapshot) -> str:
-    action = "BUY CE" if scalp.side is Side.BUY else "BUY PE" if scalp.side is Side.SELL else "WAIT"
+    execution_action = "BUY CE" if scalp.side is Side.BUY else "BUY PE" if scalp.side is Side.SELL else "WAIT / CONFLICT"
+    raw_action = "BUY CE" if scalp.raw_side is Side.BUY else "BUY PE" if scalp.raw_side is Side.SELL else "NEUTRAL"
     color = "#67e8a5" if scalp.side is Side.BUY else "#fb7185" if scalp.side is Side.SELL else "#facc15"
     reasons = "<br>".join(scalp.reasons[:2]) or "Waiting for aligned live scalp evidence"
     if scalp.plan is None:
@@ -1117,7 +1195,8 @@ def _scalp_html(scalp: ScalpSnapshot) -> str:
         )
     return (
         f"<b>{scalp.underlying}</b> "
-        f"<span style='color:{color}; font-size:14px; font-weight:900'>{action} | {scalp.score}/100 | Confidence {scalp.confidence}%</span><br>"
+        f"<span style='color:{color}; font-size:14px; font-weight:900'>{execution_action} | Raw evidence {scalp.score}/100 | Evidence quality {scalp.confidence}%</span><br>"
+        f"<span style='color:#dce8f6'>Raw directional bias: {raw_action} | Setup status: {scalp.setup_status}</span><br>"
         f"<span style='color:#a7f3d0'>{reasons}</span><br>"
         f"<span style='color:#f5d0fe'>{plan}</span>"
     )
@@ -1200,7 +1279,7 @@ def _timeframe_summary(analyses: dict[int, IndicatorSnapshot]) -> str:
     return " | ".join(summaries)
 
 
-def _plan_html(snapshot: ConvictionSnapshot) -> str:
+def _plan_html(snapshot: ConvictionSnapshot, policy_status: dict[str, object] | None = None) -> str:
     if snapshot.plan is None:
         return (
             "<b style='color:#d8b4fe'>NO PAPER SETUP</b><br><br>"
@@ -1208,7 +1287,13 @@ def _plan_html(snapshot: ConvictionSnapshot) -> str:
             "Requires 1m/5m alignment, no opposing higher timeframe, A/A+ grade, an ATM quote, and risk inside the configured maximum loss per lot."
         )
     plan = snapshot.plan
-    return f"<b style='color:#d8b4fe'>QUALIFIED CANDIDATE | {plan.option_symbol}</b><br><br>Entry: <b>{plan.entry:.2f}</b><br>Stop loss: <b>{plan.stop_loss:.2f}</b><br>Target 1: <b>{plan.target_1:.2f}</b><br>Target 2: <b>{plan.target_2:.2f}</b><br>Maximum loss / lot: <b>Rs. {plan.max_loss_per_lot:,.0f}</b><br>Lot size: <b>{plan.lot_size}</b><br><br><span style='color:#facc15'>A fresh completed 5m decision and forward-policy checks are still required. No order is submitted.</span>"
+    if policy_status is not None and not policy_status.get("market_eligible"):
+        heading = "OBSERVATION ONLY â€” NOT FORWARD-POLICY VALIDATED"
+        note = "This market remains journaled for research. No forward paper position can open under the active policy."
+    else:
+        heading = "FORWARD-POLICY CANDIDATE"
+        note = "A fresh completed 5m decision and forward-policy checks are still required. No order is submitted."
+    return f"<b style='color:#d8b4fe'>{heading} | {plan.option_symbol}</b><br><br>Entry: <b>{plan.entry:.2f}</b><br>Stop loss: <b>{plan.stop_loss:.2f}</b><br>Target 1: <b>{plan.target_1:.2f}</b><br>Target 2: <b>{plan.target_2:.2f}</b><br>Maximum loss / lot: <b>Rs. {plan.max_loss_per_lot:,.0f}</b><br>Lot size: <b>{plan.lot_size}</b><br><br><span style='color:#facc15'>{note}</span>"
 
 
 def _active_plan_detail(plan: TradePlan) -> str:
@@ -1282,7 +1367,7 @@ def _option_indicator_overrides(chain: OptionChainSnapshot) -> dict[str, tuple[s
         "ATM CE Premium Velocity": (_signed(call_velocity), "BULLISH" if call_velocity is not None and call_velocity > 0 else "BEARISH" if call_velocity is not None and call_velocity < 0 else "NEUTRAL", "Observed ATM call premium change per second"),
         "ATM PE Premium Velocity": (_signed(put_velocity), "BEARISH" if put_velocity is not None and put_velocity > 0 else "BULLISH" if put_velocity is not None and put_velocity < 0 else "NEUTRAL", "Observed ATM put premium change per second"),
         "Bid-Ask Spread": (_number(chain.atm_bid_ask_spread), "INFO", "Direct ATM CE/PE average bid-ask spread from Kite top-five depth"),
-        "ATM Book Imbalance": (_signed(chain.atm_book_imbalance), _direction_state(chain.atm_book_imbalance), "Direct top-five ATM CE/PE bid quantity less ask quantity, normalized"),
+        "ATM Book Imbalance": (_signed(chain.atm_book_imbalance), "INFO" if chain.atm_book_imbalance is not None else "WAITING", "Direct top-five ATM CE/PE depth. It is a liquidity context, not a directional vote."),
         "Estimated CVD": (_number(chain.atm_estimated_cvd, 0), _direction_state(chain.atm_estimated_cvd), "Estimated from tick price versus bid/ask and available trade size; Kite has no true aggressor flag"),
         "OTM Continuation": (_signed(chain.otm_continuation), _direction_state(chain.otm_continuation), "Derived from first OTM call versus put premium velocity; not an exchange-labelled signal"),
     }

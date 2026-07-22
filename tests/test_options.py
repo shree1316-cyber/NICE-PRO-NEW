@@ -57,3 +57,32 @@ def test_option_chain_reports_direct_depth_and_labelled_estimates() -> None:
     assert chain.atm_book_imbalance == 0.1
     assert chain.atm_estimated_cvd is not None
     assert chain.otm_continuation is not None
+
+
+def test_option_chain_rebases_cvd_until_two_fresh_quotes_arrive() -> None:
+    """A reconnect must not carry a pre-outage CVD into the next session."""
+    expiry = date.today() + timedelta(days=7)
+    call = OptionContract(10, "NFO:NIFTYCE", "NIFTY", expiry, 25000, OptionType.CALL)
+    engine = OptionChainEngine()
+    engine.register([call])
+    now = datetime.now(timezone.utc)
+
+    engine.update(Quote(10, call.symbol, 100, now, last_quantity=10), spot=25000)
+    ready_chain = engine.update(
+        Quote(10, call.symbol, 101, now + timedelta(seconds=1), last_quantity=10), spot=25000
+    )
+    assert ready_chain is not None
+    assert ready_chain.metrics[0].estimated_cvd is not None
+
+    engine.reset_derived_metrics()
+    warming_chain = engine.update(
+        Quote(10, call.symbol, 102, now + timedelta(seconds=2), last_quantity=10), spot=25000
+    )
+    assert warming_chain is not None
+    assert warming_chain.metrics[0].estimated_cvd is None
+
+    fresh_chain = engine.update(
+        Quote(10, call.symbol, 103, now + timedelta(seconds=3), last_quantity=10), spot=25000
+    )
+    assert fresh_chain is not None
+    assert fresh_chain.metrics[0].estimated_cvd is not None

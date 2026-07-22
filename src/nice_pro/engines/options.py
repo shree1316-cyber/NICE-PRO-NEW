@@ -9,6 +9,15 @@ from nice_pro.models.market import OptionChainSnapshot, OptionContract, OptionMe
 
 
 class OptionChainEngine:
+    """Nearest-expiry option-chain state with explicit data provenance.
+
+    Kite supplies quote/depth snapshots, not a complete exchange order-event
+    stream.  The engine therefore keeps direct fields and model-derived fields
+    separate, and clears derived state after every stream interruption.
+    """
+
+    FRESH_QUOTE_MAX_AGE_SECONDS = 10.0
+
     def __init__(self, risk_free_rate: float = 0.065) -> None:
         self._risk_free_rate = risk_free_rate
         self._contracts: dict[int, OptionContract] = {}
@@ -16,9 +25,27 @@ class OptionChainEngine:
         self._first_oi: dict[int, int] = {}
         self._premiums: dict[int, deque[Quote]] = defaultdict(lambda: deque(maxlen=12))
         self._estimated_cvd: dict[int, int] = defaultdict(int)
+        # A signed-volume estimate needs at least two consecutive quotes.  A
+        # zero on the first quote must remain "not ready", not be displayed as
+        # a neutral live CVD reading.
+        self._cvd_ready_tokens: set[int] = set()
 
     def register(self, contracts: list[OptionContract]) -> None:
         self._contracts.update({contract.instrument_token: contract for contract in contracts})
+
+    def reset_derived_metrics(self) -> None:
+        """Discard pre-interruption option state before the next stream quote.
+
+        An estimated CVD or premium velocity spanning a WebSocket outage is not
+        an honest live measurement.  Clearing quote history forces the model to
+        warm up again rather than silently treating missed ticks as flow.
+        Session OI baselines are intentionally retained because they represent
+        the first observed OI for the current application session.
+        """
+        self._quotes.clear()
+        self._premiums.clear()
+        self._estimated_cvd.clear()
+        self._cvd_ready_tokens.clear()
 
     def is_option_token(self, token: int) -> bool:
         return token in self._contracts
@@ -30,6 +57,8 @@ class OptionChainEngine:
             return None
         previous = self._quotes.get(quote.instrument_token)
         self._estimated_cvd[quote.instrument_token] += _estimated_signed_volume(quote, previous)
+        if previous is not None:
+            self._cvd_ready_tokens.add(quote.instrument_token)
         self._quotes[quote.instrument_token] = quote
         self._premiums[quote.instrument_token].append(quote)
         if quote.open_interest is not None:
@@ -62,6 +91,19 @@ class OptionChainEngine:
         atm_imbalance = _atm_book_imbalance(metrics, atm)
         atm_cvd = _atm_estimated_cvd(metrics, atm)
         otm_continuation = _otm_continuation(metrics, atm)
+        now = datetime.now(timezone.utc)
+        quoted_contracts = sum(contract.instrument_token in self._quotes for contract in contracts)
+        quote_ages = [
+            _quote_age_seconds(self._quotes[contract.instrument_token].received_at, now)
+            for contract in contracts
+            if contract.instrument_token in self._quotes
+        ]
+        fresh_contracts = sum(age <= self.FRESH_QUOTE_MAX_AGE_SECONDS for age in quote_ages)
+        atm_ages = [
+            _quote_age_seconds(metric.quote_received_at, now)
+            for metric in metrics
+            if metric.contract.strike == atm and metric.quote_received_at is not None
+        ]
         return OptionChainSnapshot(
             underlying=underlying,
             calculated_at=datetime.now(tz=IST),
@@ -77,6 +119,12 @@ class OptionChainEngine:
             atm_book_imbalance=atm_imbalance,
             atm_estimated_cvd=atm_cvd,
             otm_continuation=otm_continuation,
+            registered_contracts=len(contracts),
+            quoted_contracts=quoted_contracts,
+            fresh_contracts=fresh_contracts,
+            oldest_quote_age_seconds=max(quote_ages) if quote_ages else None,
+            # Both ATM CE and PE must be current, so use the older quote age.
+            atm_quote_age_seconds=max(atm_ages) if len(atm_ages) == 2 else None,
         )
 
     def _metric(self, contract: OptionContract, spot: float | None) -> OptionMetric | None:
@@ -91,7 +139,12 @@ class OptionChainEngine:
             contract, quote.last_price, quote.open_interest, oi_change, iv, velocity,
             quote.bid, quote.ask, quote.top_bid_quantity, quote.top_ask_quantity,
             quote.bid_depth_quantity, quote.ask_depth_quantity,
-            self._estimated_cvd.get(contract.instrument_token),
+            (
+                self._estimated_cvd.get(contract.instrument_token)
+                if contract.instrument_token in self._cvd_ready_tokens
+                else None
+            ),
+            quote.received_at,
         )
 
 
@@ -132,6 +185,11 @@ def _as_aware_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         value = value.replace(tzinfo=IST)
     return value.astimezone(timezone.utc)
+
+
+def _quote_age_seconds(value: datetime, now: datetime) -> float:
+    """Return a non-negative quote age despite minor exchange-clock skew."""
+    return max(0.0, (_as_aware_utc(now) - _as_aware_utc(value)).total_seconds())
 
 
 def _observed_max_pain(metrics: tuple[OptionMetric, ...], strikes: list[float]) -> float | None:

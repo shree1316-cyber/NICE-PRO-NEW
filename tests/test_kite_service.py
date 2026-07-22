@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -41,3 +41,14 @@ def test_current_expiry_option_contracts_returns_all_nearest_strikes(monkeypatch
         (24100.0, OptionType.CALL),
         (24100.0, OptionType.PUT),
     ]
+
+
+def test_stream_health_marks_an_old_live_stream_as_stale() -> None:
+    service = KiteService(Settings("key", "secret", "token"))
+    service._stream_state = "LIVE"  # Test the presentation boundary only.
+    service._last_tick_at = datetime.now(timezone.utc) - timedelta(seconds=11)
+
+    health = service.stream_health(stale_after_seconds=10)
+
+    assert health["state"] == "STALE"
+    assert health["last_tick_age_seconds"] is not None

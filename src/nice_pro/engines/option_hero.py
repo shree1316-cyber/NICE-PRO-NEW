@@ -22,7 +22,14 @@ class OptionHeroConfig:
 
 
 class OptionHeroEngine:
-    """Scores chain evidence without mixing in price-action or MTF evidence."""
+    """Scores nearest-expiry chain evidence without pretending it is a forecast.
+
+    The score has a fixed 100-point directional budget.  Correlated inputs are
+    grouped: total OI can corroborate PCR, but cannot become a second
+    independent direction vote.  Top-five book depth is an execution-quality
+    context only because combined CE/PE depth is not a reliable directional
+    order-flow signal.
+    """
 
     def __init__(self, config: OptionHeroConfig | None = None) -> None:
         self._config = config or OptionHeroConfig()
@@ -38,68 +45,71 @@ class OptionHeroEngine:
         call_delta = sum(item.open_interest_change or 0 for item in calls)
         put_delta = sum(item.open_interest_change or 0 for item in puts)
 
+        # OI-position group: 25 PCR points plus at most 10 corroboration
+        # points from aggregate OI.  The latter is never counted alone.
         pcr = chain.put_call_ratio_oi
+        oi_side = Side.NEUTRAL
         if pcr is not None:
             if pcr >= 1.15:
-                bullish += 20
+                bullish += 25
+                oi_side = Side.BUY
                 reasons.append(f"PCR {pcr:.2f} favours put-side OI")
             elif pcr <= 0.85:
-                bearish += 20
+                bearish += 25
+                oi_side = Side.SELL
                 reasons.append(f"PCR {pcr:.2f} favours call-side OI")
             else:
                 conflicts.append(f"PCR {pcr:.2f} is neutral")
         if call_oi and put_oi:
-            if put_oi > call_oi:
-                bullish += 7
-                reasons.append("Total put OI exceeds call OI")
-            elif call_oi > put_oi:
-                bearish += 7
-                reasons.append("Total call OI exceeds put OI")
+            aggregate_side = Side.BUY if put_oi > call_oi else Side.SELL if call_oi > put_oi else Side.NEUTRAL
+            if aggregate_side is Side.BUY and oi_side is Side.BUY:
+                bullish += 10
+                reasons.append("Aggregate put OI corroborates PCR")
+            elif aggregate_side is Side.SELL and oi_side is Side.SELL:
+                bearish += 10
+                reasons.append("Aggregate call OI corroborates PCR")
+            elif oi_side is not Side.NEUTRAL:
+                conflicts.append("Aggregate OI does not corroborate PCR")
         if call_delta or put_delta:
             if put_delta > call_delta:
-                bullish += 13
+                bullish += 15
                 reasons.append("Session put OI change leads call OI change")
             elif call_delta > put_delta:
-                bearish += 13
+                bearish += 15
                 reasons.append("Session call OI change leads put OI change")
 
         skew = chain.iv_skew
         if skew is not None:
             if skew <= -0.5:
-                bullish += 12
+                bullish += 10
                 reasons.append("ATM call IV exceeds put IV")
             elif skew >= 0.5:
-                bearish += 12
+                bearish += 10
                 reasons.append("ATM put IV exceeds call IV")
         else:
             conflicts.append("ATM IV skew is not ready")
 
-        if chain.atm_book_imbalance is not None:
-            if chain.atm_book_imbalance >= 0.10:
-                bullish += 17
-                reasons.append("ATM top-5 book is bid-heavy")
-            elif chain.atm_book_imbalance <= -0.10:
-                bearish += 17
-                reasons.append("ATM top-5 book is offer-heavy")
-        else:
+        if chain.atm_book_imbalance is None:
             conflicts.append("ATM top-5 depth is not ready")
+        else:
+            reasons.append("ATM top-5 depth is available (liquidity context only)")
 
         if chain.atm_estimated_cvd is not None:
             if chain.atm_estimated_cvd > 0:
-                bullish += 17
+                bullish += 18
                 reasons.append("ATM estimated CVD is positive")
             elif chain.atm_estimated_cvd < 0:
-                bearish += 17
+                bearish += 18
                 reasons.append("ATM estimated CVD is negative")
         else:
             conflicts.append("Estimated CVD is warming up")
 
         if chain.otm_continuation is not None:
             if chain.otm_continuation > 0:
-                bullish += 14
+                bullish += 12
                 reasons.append("First OTM call velocity leads put velocity")
             elif chain.otm_continuation < 0:
-                bearish += 14
+                bearish += 12
                 reasons.append("First OTM put velocity leads call velocity")
         else:
             conflicts.append("OTM continuation is warming up")
@@ -112,6 +122,19 @@ class OptionHeroEngine:
             conflicts.append("ATM bid-ask spread is not ready")
         else:
             reasons.append(f"ATM average spread is {chain.atm_bid_ask_spread:.2f}")
+
+        call_velocity, put_velocity = _atm_premium_velocities(chain)
+        if call_velocity is None or put_velocity is None:
+            conflicts.append("ATM premium velocity is warming up")
+        elif call_velocity > put_velocity:
+            bullish += 10
+            reasons.append("ATM call premium velocity leads")
+        elif put_velocity > call_velocity:
+            bearish += 10
+            reasons.append("ATM put premium velocity leads")
+
+        if chain.atm_quote_age_seconds is not None and chain.atm_quote_age_seconds > 10:
+            conflicts.append(f"ATM quote is stale ({chain.atm_quote_age_seconds:.1f}s)")
 
         side = _side(bullish, bearish)
         directional = max(bullish, bearish)
@@ -140,6 +163,20 @@ class OptionHeroEngine:
     ) -> tuple[TradePlan | None, str | None]:
         if side is Side.NEUTRAL or grade not in {TradeGrade.A, TradeGrade.A_PLUS} or chain.atm_strike is None:
             return None, None
+        # A full-chain directional display can be useful while the chain is
+        # warming up, but a paper plan must never use an old or incomplete
+        # market snapshot.  Legacy/manual snapshots use zero registered
+        # contracts and intentionally bypass this live-feed check.
+        if chain.registered_contracts:
+            if chain.fresh_contracts < chain.registered_contracts:
+                return None, (
+                    "Hero plan blocked: nearest-expiry chain is not fully fresh "
+                    f"({chain.fresh_contracts}/{chain.registered_contracts})"
+                )
+            if chain.atm_quote_age_seconds is None:
+                return None, "Hero plan blocked: ATM CE/PE pair is still warming up"
+            if chain.atm_quote_age_seconds > 10:
+                return None, f"Hero plan blocked: ATM quote is stale ({chain.atm_quote_age_seconds:.1f}s)"
         contract_type = OptionType.CALL if side is Side.BUY else OptionType.PUT
         candidate = next(
             (item for item in chain.metrics if item.contract.strike == chain.atm_strike and item.contract.option_type is contract_type),
@@ -204,7 +241,7 @@ def _grade(side: Side, directional: int, conflicts: int) -> TradeGrade:
 def _confidence(bullish: int, bearish: int, conflicts: int) -> int:
     """Return evidence quality, not a predicted chance of a winning trade.
 
-    The seven directional components form a true 100-point budget. Coverage
+    The six directional component groups form a true 100-point budget. Coverage
     reflects how much live directional evidence is available; dominance reflects
     how strongly one direction outweighs the other. Missing/uncertain fields
     reduce the displayed confidence.
@@ -213,3 +250,12 @@ def _confidence(bullish: int, bearish: int, conflicts: int) -> int:
     dominance = abs(bullish - bearish)
     base = round(coverage * 0.60 + dominance * 0.40)
     return max(0, min(100, base - min(20, conflicts * 5)))
+
+
+def _atm_premium_velocities(chain: OptionChainSnapshot) -> tuple[float | None, float | None]:
+    values = {
+        item.contract.option_type: item.premium_velocity
+        for item in chain.metrics
+        if item.contract.strike == chain.atm_strike
+    }
+    return values.get(OptionType.CALL), values.get(OptionType.PUT)
