@@ -21,8 +21,12 @@ The label is `1` only when +1.5R is reached before -1R within 90 minutes and
 within the same exchange session. If both levels occur in one candle, the stop
 wins; timeout is `0`. This is deliberately conservative.
 
-## Next commits
+## Training and validation
 
-1. Strict rolling walk-forward training, calibration, and model registry.
-2. Dashboard ML Shadow score/status/top reasons, then monitored weekly retraining
-   and three-cycle feature-pruning reports.
+The optional package uses regularised LightGBM (`max_depth=4`, L1/L2 penalties,
+and early stopping), then calibrates its probability on a later chronological
+partition. Validation is rolling only: 120 sessions train, one-session embargo,
+then 20 sessions test. There is no random k-fold split.
+
+The next commit will add dashboard shadow score/status/top drivers plus weekly
+retraining and three-cycle feature-pruning reports.
