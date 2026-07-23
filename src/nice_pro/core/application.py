@@ -1,7 +1,8 @@
 """Application composition root."""
 
 from collections.abc import Callable
-from threading import RLock, Thread
+from datetime import datetime, timezone
+from threading import Event, RLock, Thread
 from time import monotonic, sleep
 
 from loguru import logger
@@ -51,6 +52,7 @@ class Application:
         self._options_by_underlying: dict[str, OptionChainSnapshot] = {}
         self._option_lock = RLock()
         self._journal_lock = RLock()
+        self._stop_requested = Event()
         self._last_option_publish: dict[str, float] = {}
         self._last_journal_candle: dict[str, object] = {}
         self._pending_journal_candle: dict[str, object] = {}
@@ -93,6 +95,7 @@ class Application:
         self._status_listeners.append(listener)
 
     def start(self) -> None:
+        self._stop_requested.clear()
         logger.info("Application started (paper trading only: {}).", self.settings.paper_trading_only)
         if self.forward_policy.enabled:
             self.publish_status(
@@ -114,7 +117,10 @@ class Application:
         else:
             self.publish_status("Kite credentials not configured — dashboard is in offline mode")
 
+        Thread(target=self._run_eod_paper_guard, name="paper-eod-guard", daemon=True).start()
+
     def stop(self) -> None:
+        self._stop_requested.set()
         self.kite.stop_stream()
         logger.info("Application stopped.")
 
@@ -354,12 +360,28 @@ class Application:
                 decision_id = self.journal.capture_decision(snapshot, analyses, options, hero, scalp)
                 self._last_journal_candle[underlying] = analysis.calculated_at
                 self._pending_journal_candle.pop(underlying, None)
-        self.paper_trades.evaluate(snapshot, options, decision_id)
+        opened = self.paper_trades.evaluate(snapshot, options, decision_id)
         for listener in tuple(self._conviction_listeners):
             listener(snapshot)
-        if self.alerts.should_alert(snapshot):
+        active = self.paper_trades.active_position(underlying)
+        if opened and self.alerts.should_alert(
+            snapshot,
+            policy=self.forward_policy,
+            decision_id=decision_id,
+            active_decision_id=active.decision_id if active is not None else None,
+            chain=options,
+        ):
             self.alerts.play(snapshot.grade)
             self.publish_status(f"{snapshot.underlying} {snapshot.grade} paper-trade setup alert")
+
+    def _run_eod_paper_guard(self) -> None:
+        """Ensure active policy papers receive a durable 15:20 IST exit."""
+        while not self._stop_requested.wait(5):
+            with self._option_lock:
+                chains = dict(self._options_by_underlying)
+            closed = self.paper_trades.force_exit_due(chains, datetime.now(timezone.utc))
+            for underlying in closed:
+                self.publish_status(f"{underlying} paper position closed by scheduled EOD safeguard")
 
 
 def run_desktop() -> None:

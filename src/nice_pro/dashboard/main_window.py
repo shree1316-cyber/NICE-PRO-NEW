@@ -96,7 +96,7 @@ class MainWindow(QMainWindow):
         self._signals = DashboardSignals()
         self._quotes: dict[str, Quote] = {}
         self._analyses: dict[str, dict[int, IndicatorSnapshot]] = {"NIFTY": {}, "SENSEX": {}}
-        self._rendered_matrix_versions: dict[str, tuple[tuple[int, object], ...]] = {"NIFTY": (), "SENSEX": ()}
+        self._rendered_matrix_versions: dict[str, tuple[object, ...]] = {"NIFTY": (), "SENSEX": ()}
         self._chains: dict[str, OptionChainSnapshot] = {}
         self._option_heroes: dict[str, OptionHeroSnapshot] = {}
         self._scalps: dict[str, ScalpSnapshot] = {}
@@ -707,7 +707,7 @@ class MainWindow(QMainWindow):
         plan_card = self._nifty_plan if snapshot.underlying == "NIFTY" else self._sensex_plan
         conviction["headline"].setText(f"MTF DIRECTION: {_decision_direction(snapshot)}")  # type: ignore[union-attr]
         matrix_bull, matrix_bear, matrix_names = _matrix_state_counts(
-            self._analyses.get(snapshot.underlying, {}).get(60), self._chains.get(snapshot.underlying)
+            self._analyses.get(snapshot.underlying, {}).get(300), self._chains.get(snapshot.underlying)
         )
         conviction["score"].setText(
             "MTF ALIGNMENT SCORE<br>"
@@ -751,7 +751,8 @@ class MainWindow(QMainWindow):
             return
         if snapshot.plan is None:
             card["status"].setText("NO PAPER SETUP")  # type: ignore[union-attr]
-            card["detail"].setText("Need the forward-test MTF gate, A/A+ grade, ATM quote, and risk inside the configured cap.")  # type: ignore[union-attr]
+            reason = next((item for item in snapshot.conflicts if "rejected" in item.lower()), None)
+            card["detail"].setText(reason or "No eligible plan: check the MTF gate, grade, ATM quote, and per-lot risk cap.")  # type: ignore[union-attr]
             return
         plan = snapshot.plan
         if not policy_status.get("market_eligible"):
@@ -782,7 +783,10 @@ class MainWindow(QMainWindow):
         if quote is not None:
             view["live"].setText(f"{quote.last_price:,.2f}")
             view["quote_meta"].setText(f"Bid / Ask: {_price_or_dash(quote.bid)} / {_price_or_dash(quote.ask)} | Live Kite quote")
-        matrix_version = tuple(sorted((timeframe, snapshot.calculated_at) for timeframe, snapshot in analyses.items()))
+        matrix_version = (
+            tuple(sorted((timeframe, snapshot.calculated_at) for timeframe, snapshot in analyses.items())),
+            chain.calculated_at if chain is not None else None,
+        )
         if analyses and matrix_version != self._rendered_matrix_versions.get(underlying, ()):
             view["indicator_summary"].setText(_timeframe_summary(analyses))  # type: ignore[union-attr]
             self._refresh_indicator_tables(view["indicator_tables"], analyses, chain)  # type: ignore[arg-type]
@@ -811,7 +815,8 @@ class MainWindow(QMainWindow):
         primary = analyses.get(300) or next(iter(analyses.values()))
         for category, table in tables.items():
             readings = [reading for reading in primary.readings if reading.category == category]
-            overrides = _option_indicator_overrides(chain) if category == "Options & Flow" and chain is not None else {}
+            is_chain_snapshot = category == "Options & Flow" and chain is not None
+            overrides = _option_indicator_overrides(chain) if is_chain_snapshot else {}
             table.setRowCount(len(readings))
             for row, reading in enumerate(readings):
                 cells: list[tuple[str, str, str]] = [(reading.name, "#dce8f6", reading.reason)]
@@ -822,8 +827,16 @@ class MainWindow(QMainWindow):
                     ) if timeframe_snapshot is not None else None
                     value, state, reason = overrides.get(reading.name, (candidate.value, candidate.state, candidate.reason)) if candidate is not None else ("—", "WAITING", "Awaiting timeframe history")
                     color = _state_color(state)
+                    if is_chain_snapshot and reading.name in overrides:
+                        value = f"{value} (current)"
+                        reason = f"{reason}. Current nearest-expiry chain snapshot shared across timeframe columns; not historical {timeframe}s data."
                     cells.append((f"{value}\n{state}", color, reason))
-                cells.append((reading.reason, "#94a9c2", reading.reason))
+                reason_text = (
+                    "Current nearest-expiry option-chain snapshot shared across all timeframe columns."
+                    if is_chain_snapshot and reading.name in overrides
+                    else reading.reason
+                )
+                cells.append((reason_text, "#94a9c2", reason_text))
                 for column, (text, color, tooltip) in enumerate(cells):
                     item = QTableWidgetItem(text)
                     item.setForeground(QColor(color))
@@ -1148,7 +1161,7 @@ def _option_summary_html(chain: OptionChainSnapshot) -> str:
         f"ATM straddle / expected move: <b>{_number(chain.expected_move)}</b>",
         f"ATM bid-ask spread (direct): <b>{_number(chain.atm_bid_ask_spread)}</b>",
         f"ATM top-5 book imbalance (direct): <b>{_signed(chain.atm_book_imbalance)}</b>",
-        f"ATM estimated CVD: <b>{_number(chain.atm_estimated_cvd, 0)}</b>",
+        f"ATM CVD estimate (derived, not true tape): <b>{_number(chain.atm_estimated_cvd, 0)}</b>",
         f"OTM continuation (derived): <b>{_signed(chain.otm_continuation)}</b>",
         coverage,
         quote_age,
@@ -1368,7 +1381,7 @@ def _option_indicator_overrides(chain: OptionChainSnapshot) -> dict[str, tuple[s
         "ATM PE Premium Velocity": (_signed(put_velocity), "BEARISH" if put_velocity is not None and put_velocity > 0 else "BULLISH" if put_velocity is not None and put_velocity < 0 else "NEUTRAL", "Observed ATM put premium change per second"),
         "Bid-Ask Spread": (_number(chain.atm_bid_ask_spread), "INFO", "Direct ATM CE/PE average bid-ask spread from Kite top-five depth"),
         "ATM Book Imbalance": (_signed(chain.atm_book_imbalance), "INFO" if chain.atm_book_imbalance is not None else "WAITING", "Direct top-five ATM CE/PE depth. It is a liquidity context, not a directional vote."),
-        "Estimated CVD": (_number(chain.atm_estimated_cvd, 0), _direction_state(chain.atm_estimated_cvd), "Estimated from tick price versus bid/ask and available trade size; Kite has no true aggressor flag"),
+        "Estimated CVD": (_number(chain.atm_estimated_cvd, 0), _direction_state(chain.atm_estimated_cvd), "Derived CVD estimate from tick price versus bid/ask and available trade size; Kite has no true exchange tape or aggressor flag"),
         "OTM Continuation": (_signed(chain.otm_continuation), _direction_state(chain.otm_continuation), "Derived from first OTM call versus put premium velocity; not an exchange-labelled signal"),
     }
 

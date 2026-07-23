@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Mapping
 from datetime import datetime, timezone
 
 from nice_pro.engines.indicators import IST
@@ -52,8 +53,12 @@ class PaperTradeTracker:
         conviction: ConvictionSnapshot,
         chain: OptionChainSnapshot,
         decision_id: int | None,
-    ) -> None:
-        """Close first, then consider one fresh policy-qualified opening."""
+    ) -> bool:
+        """Close first, then consider one fresh policy-qualified opening.
+
+        Returns ``True`` only when this call actually opens a new position.
+        That result is used to prevent alerts for raw dashboard candidates.
+        """
         now = chain.calculated_at
         active = self._active.get(conviction.underlying)
         if active is not None:
@@ -61,32 +66,63 @@ class PaperTradeTracker:
             # A position that closed on this quote must never be re-opened from
             # the same event/candle.  The next eligible *completed 5m* decision
             # will be considered on a later call.
-            return
+            return False
 
         plan = conviction.plan
         if plan is None:
-            return
+            return False
         if self._policy is None:
             self._open(plan, "MTF_CONVICTION", decision_id, None)
-            return
+            return True
         if decision_id is None:
-            return
+            return False
 
-        rejection = self._policy.entry_reason(conviction, now)
+        rejection = self._policy.entry_reason(conviction, now, chain)
         if rejection is not None:
-            return
+            return False
         session_date = now.astimezone(IST).date()
         entries_today = self._journal.paper_open_count(
             self._policy.source, conviction.underlying, session_date
         )
         if entries_today >= self._policy.max_trades_per_day:
-            return
+            return False
         last_closed = self._journal.last_paper_close_at(
             self._policy.source, conviction.underlying
         )
         if last_closed is not None and now < self._policy.cooldown_until(last_closed):
-            return
+            return False
         self._open(plan, self._policy.source, decision_id, self._policy.policy_id)
+        return True
+
+    def force_exit_due(
+        self,
+        chains: Mapping[str, OptionChainSnapshot],
+        now: datetime,
+    ) -> tuple[str, ...]:
+        """Close active policy positions after the scheduled EOD time.
+
+        This is intentionally independent of a new option tick: otherwise an
+        illiquid option could remain open in the journal indefinitely.
+        """
+        if self._policy is None or not self._policy.should_force_exit(now):
+            return ()
+        closed: list[str] = []
+        for underlying, active in tuple(self._active.items()):
+            chain = chains.get(underlying)
+            metric = (
+                next(
+                    (item for item in chain.metrics if item.contract.symbol == active.plan.option_symbol),
+                    None,
+                )
+                if chain is not None
+                else None
+            )
+            observed_price = metric.last_price if metric is not None and metric.last_price > 0 else None
+            fill_price = observed_price if observed_price is not None else active.plan.entry
+            reason = "SCHEDULED_EOD_EXIT" if observed_price is not None else "SCHEDULED_EOD_NO_QUOTE"
+            self._close(active, fill_price, observed_price, "TIME_EXIT", reason)
+            closed.append(underlying)
+        return tuple(closed)
 
     def active_plan(self, underlying: str) -> TradePlan | None:
         active = self._active.get(underlying)
@@ -208,7 +244,7 @@ class PaperTradeTracker:
         self,
         active: _ActivePaperTrade,
         fill_price: float,
-        observed_price: float,
+        observed_price: float | None,
         outcome: str,
         exit_reason: str,
     ) -> None:

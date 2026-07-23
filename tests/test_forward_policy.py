@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import datetime, time, timezone
 
 from nice_pro.engines.indicators import IST
@@ -38,6 +39,7 @@ def _conviction(plan: TradePlan | None = None) -> ConvictionSnapshot:
 
 
 def _chain(price: float) -> OptionChainSnapshot:
+    now = datetime.now(timezone.utc)
     contract = OptionContract(
         1,
         "NIFTYTESTCE",
@@ -47,13 +49,29 @@ def _chain(price: float) -> OptionChainSnapshot:
         OptionType.CALL,
         50,
     )
+    put_contract = OptionContract(
+        2,
+        "NIFTYTESTPE",
+        "NIFTY",
+        datetime.now().date(),
+        24_000,
+        OptionType.PUT,
+        50,
+    )
     return OptionChainSnapshot(
         "NIFTY",
-        datetime.now(timezone.utc),
+        now,
         24_000,
         24_000,
         1.1,
-        (OptionMetric(contract, price, 100, 5, 12.0, 1.0),),
+        (
+            OptionMetric(contract, price, 100, 5, 12.0, 1.0, quote_received_at=now),
+            OptionMetric(put_contract, 100, 100, 5, 12.0, 1.0, quote_received_at=now),
+        ),
+        registered_contracts=2,
+        quoted_contracts=2,
+        fresh_contracts=2,
+        atm_quote_age_seconds=0.0,
     )
 
 
@@ -143,6 +161,28 @@ def test_nifty_candidate_does_not_open_a_sensex_forward_position(tmp_path):
     tracker.evaluate(sensex, sensex_chain, decision_id=1)
 
     assert tracker.active_plan("SENSEX") is None
+
+
+def test_policy_blocks_incomplete_chain_before_opening(tmp_path):
+    journal = ResearchJournal(tmp_path / "journal.sqlite3")
+    tracker = PaperTradeTracker(journal, _policy())
+    incomplete = replace(_chain(100), quoted_contracts=1)
+
+    assert not tracker.evaluate(_conviction(_plan()), incomplete, decision_id=1)
+    assert tracker.active_plan("NIFTY") is None
+
+
+def test_scheduled_eod_guard_closes_without_a_new_tick(tmp_path):
+    journal = ResearchJournal(tmp_path / "journal.sqlite3")
+    policy = _policy()
+    policy = replace(policy, force_exit_time=time.min)
+    tracker = PaperTradeTracker(journal, policy)
+    chain = _chain(100)
+
+    assert tracker.evaluate(_conviction(_plan()), chain, decision_id=1)
+    assert tracker.force_exit_due({}, chain.calculated_at) == ("NIFTY",)
+    assert tracker.active_plan("NIFTY") is None
+    assert journal.performance_summary(10, source=policy.source)["time_exits"] == 1
 
 
 def test_journal_exposes_ist_timestamp_for_display(tmp_path):
