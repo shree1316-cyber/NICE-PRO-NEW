@@ -51,15 +51,20 @@ def main() -> None:
         if not candles:
             raise SystemExit("Kite returned no historical candles.")
         print(f"Building as-of ML samples from {len(candles):,} candles...")
-        samples = HistoricalDatasetBuilder().build(candles)
+        samples = HistoricalDatasetBuilder().build(candles, symbol=subscription.symbol)
         print(f"Built {len(samples):,} labelled directional samples. Running rolling validation...")
         folds = WalkForwardValidator().validate(samples)
         artifact = ModelTrainer().fit(samples)
         registry = ModelRegistry(args.output)
-        model_path, metadata_path = registry.save_shadow(artifact)
-        FeatureImportanceTracker(args.output / "importance_history.json").record(artifact)
+        model_name = f"latest_shadow_{args.underlying.lower()}"
+        model_path, metadata_path = registry.save_shadow(artifact, name=model_name)
+        FeatureImportanceTracker(
+            args.output / f"importance_history_{args.underlying.lower()}.json"
+        ).record(artifact)
     except MLDependencyError as error:
         raise SystemExit(str(error)) from error
+    except (RuntimeError, ValueError) as error:
+        raise SystemExit(f"ML training did not complete: {error}") from error
     report = {
         "mode": "shadow_only",
         "underlying": args.underlying,
@@ -77,7 +82,7 @@ def main() -> None:
         "metadata": str(metadata_path),
         "notice": "ML score is display-only. It does not change the 308D policy or submit orders.",
     }
-    report_path = args.output / "latest_shadow_report.json"
+    report_path = args.output / f"latest_shadow_report_{args.underlying.lower()}.json"
     report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
 

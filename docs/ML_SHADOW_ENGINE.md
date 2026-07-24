@@ -46,7 +46,10 @@ three retraining cycles. It is never silently removed from a live model.
 .\.venv\Scripts\python.exe -m nice_pro.ml.runner --days 300 --underlying NIFTY
 ```
 
-The command saves `data/ml_models/latest_shadow.joblib` and a validation report.
-Restart NICE-PRO after training to load it. A good-looking training score is not
+The command saves an underlying-specific model such as
+`data/ml_models/latest_shadow_nifty.joblib` and an underlying-specific validation
+report. The running
+dashboard detects a newly written model on its next five-minute evaluation; a
+restart is not required. A good-looking training score is not
 enough: compare the shadow model with the 308D policy through 10–20 paper-forward
 sessions before considering any policy change.

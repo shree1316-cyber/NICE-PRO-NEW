@@ -24,10 +24,16 @@ class HistoricalDatasetBuilder:
         self._indicators = IndicatorEngine()
         self._conviction = ConvictionEngine()
 
-    def build(self, minute_candles: tuple[Candle, ...] | list[Candle]) -> tuple[LabeledSample, ...]:
+    def build(
+        self,
+        minute_candles: tuple[Candle, ...] | list[Candle],
+        *,
+        symbol: str | None = None,
+    ) -> tuple[LabeledSample, ...]:
         candles = tuple(sorted(minute_candles, key=lambda bar: bar.opened_at))
         if len(candles) < 500:
             raise ValueError("At least 500 completed minute candles are required for ML research.")
+        analysis_symbol = symbol or candles[0].symbol
         bars = {60: candles}
         for seconds in _TIMEFRAMES[1:]:
             bars[seconds] = _resample(candles, seconds)
@@ -36,7 +42,7 @@ class HistoricalDatasetBuilder:
         for index, decision_bar in enumerate(candles[:-1]):
             if decision_bar.closed_at.minute % 5:
                 continue
-            analyses = self._analyses_at(decision_bar.closed_at, bars, closed)
+            analyses = self._analyses_at(decision_bar.closed_at, bars, closed, analysis_symbol)
             core = analyses[300]
             if core.atr is None or core.atr <= 0:
                 continue
@@ -55,11 +61,11 @@ class HistoricalDatasetBuilder:
             output.append(LabeledSample(build_feature_row(core, decision.side, prior_close=prior, fifteen_bar_close=prior_15), label))
         return tuple(output)
 
-    def _analyses_at(self, as_of, bars, closed):  # type: ignore[no-untyped-def]
+    def _analyses_at(self, as_of, bars, closed, symbol: str):  # type: ignore[no-untyped-def]
         output = {}
         for seconds in _TIMEFRAMES:
             position = bisect_right(closed[seconds], as_of)
             lookback = 500 if seconds == 60 else 150
             history = bars[seconds][max(0, position - lookback):position]
-            output[seconds] = self._indicators.evaluate("NSE:NIFTY 50", history, seconds)
+            output[seconds] = self._indicators.evaluate(symbol, history, seconds)
         return output
