@@ -44,6 +44,7 @@ For desktop responsiveness, NICE-PRO retains every live option tick but recalcul
 
 At startup NICE-PRO discovers and subscribes to the nearest current-month NIFTY and SENSEX futures. Their exchange-traded volume is overlaid on the corresponding spot-index candles solely to calculate the volume indicator category. Each volume row identifies this as a **futures-volume proxy**, never as spot-index volume.
 
+<<<<<<< Updated upstream
 ### Live microstructure fields and reconnect safety
 
 - **Bid-Ask Spread:** direct average of the live ATM CE/PE best bid and best ask.
@@ -58,22 +59,44 @@ The dashboard distinguishes direct data, derived estimates, unavailable feeds, a
 The Options page includes separate NIFTY and SENSEX **Hero** boxes. They use only nearest-expiry chain inputs: PCR plus aggregate OI corroboration, changing call/put OI, ATM IV skew, straddle, expected move, direct bid-ask spread, top-five depth availability, estimated CVD, derived OTM continuation, and ATM premium velocity. Its raw directional-evidence score is a true 100-point budget: OI-position group 35 (PCR 25 plus corroboration 10), OI change 15, IV skew 10, estimated CVD 18, OTM continuation 12, and ATM premium velocity 10. Top-five depth is an execution/liquidity check, not a directional weight.
 
 Hero grades use the normalized directional-evidence score: **A+ = 80--100** (and at most one unresolved conflict), **A = 65--79** (and at most two), **B = 45--64**, **C = 25--44**, and **Avoid = below 25 or mixed directional evidence**. A Hero plan is strictly paper-only and appears only for an A/A+ option-chain grade with a fresh ATM quote and risk inside the per-lot cap. The Hero box labels this explicitly as a **raw chain bias**: it is not forward-policy validation, a probability of profit, or a win-rate forecast. “Evidence quality” measures live-data coverage and agreement, not certainty.
+=======
+### Live microstructure fields
+
+- **Bid-Ask Spread:** direct average of the live ATM CE/PE best bid and best ask.
+- **ATM Book Imbalance:** direct, normalized imbalance from Kite's available top-five bid/offer quantities for the ATM CE/PE pair.
+- **Estimated CVD:** live estimate using price-versus-quote classification and available trade size. Kite does not supply exchange aggressor flags, so this must not be treated as true exchange CVD.
+- **OTM Continuation:** live chain-derived estimate from the first OTM call and put premium velocities. It is not an exchange-labelled event.
+
+### Full-chain Hero Conviction
+
+The Options page includes separate NIFTY and SENSEX **Hero** boxes. They use only nearest-expiry chain inputs: PCR, total and changing call/put OI, ATM IV skew, straddle, expected move, direct bid-ask spread, top-five book imbalance, estimated CVD, and derived OTM continuation. Its directional score is a true 100-point budget: PCR 20, total OI 7, OI change 13, IV skew 12, book imbalance 17, estimated CVD 17, and OTM continuation 14. A Hero plan is strictly paper-only and appears only for an A/A+ option-chain grade with a live ATM quote and risk inside the per-lot cap. Confidence measures the coverage and agreement of the live chain evidence; it is not a probability of profit. The Hero model does not use price-action or multi-timeframe evidence and is not a trading guarantee.
+>>>>>>> Stashed changes
 
 ### Indicator matrix summary and scalp box
 
 The dashboard quote cards show a compact, **5-minute indicator-matrix audit**. It counts bullish and bearish readings within Trend (20 points), Momentum (20), Volatility (15), Levels (15), Volume (15), and Options & Flow (15). A category's points are proportional to the number of its rows currently classified bullish or bearish; neutral, informational, and missing-data rows do not create a vote.
 
+<<<<<<< Updated upstream
 The Options page also contains a separate **Scalping Box** for each index. Its 100-point paper-only framework requires: aligned 10s/30s direction (40), estimated CVD (25), OTM continuation (20), and ATM premium-velocity leadership (15). Top-five ATM depth and an acceptable spread are execution-quality gates, not direction weights. If raw option-flow bias conflicts with 10s/30s timing, the displayed execution direction becomes **WAIT / CONFLICT** even if the raw score is high. A scalp plan needs a score of at least 70, evidence quality of at least 65, no unresolved conflicts, a fresh ATM quote, and risk within the configured per-lot cap. Stops are 8% of premium, with targets at 1.08x and 1.15x entry; these are configurable model parameters, not guarantees.
+=======
+The Options page also contains a separate **Scalping Box** for each index. Its 100-point paper-only framework requires: 10s/30s directional alignment (30), direct top-five ATM book imbalance (25), estimated CVD (20), OTM continuation (15), and ATM premium-velocity leadership (10). An acceptable ATM spread is an execution-quality gate. A scalp plan needs a score of at least 70, confidence of at least 65, no unresolved data conflicts, a live ATM quote, and risk within the configured per-lot cap. Stops are 8% of premium, with targets at 1.08× and 1.15× entry; these are configurable model parameters, not guarantees.
+>>>>>>> Stashed changes
 
 The timeframe weights are deliberately category-level safeguards, not a claim that all 100 indicator rows are independent votes. They must be validated with paper-trade and historical results before being relied on. NICE-PRO contains no order-placement API. A trade plan is a paper-only candidate and is never an instruction or guarantee.
 
 ### Research journal and 10-day reports
 
+<<<<<<< Updated upstream
 The **Journal** page stores a local, decision-time research snapshot for every completed **5-minute core candle** after the market, option-chain and MTF models are ready. Each snapshot contains the seven timeframe readings, all configured indicator-matrix rows, core/MTF scores and gate, reasons/conflicts, full nearest-expiry chain metrics, Hero/Scalp assessments and the candidate plan. Raw records are stored in UTC for reproducible research, while the dashboard displays their timestamps in **IST**. The local SQLite file defaults to `data/nice_pro_journal.sqlite3` and can be relocated through `NICE_JOURNAL_DATABASE`.
 
 The default forward-paper policy is `NIFTY_CORE_308D_V1`, based on the selected **NIFTY** 308-session core candidate: MTF score at least 65, grade A/A+, a fresh completed 5-minute spot decision, a 15-minute cooldown after a close, no more than three entries per IST day, and a 15:20 IST forced end-of-day close. It does not open SENSEX forward positions until a separately validated SENSEX candidate is selected; SENSEX remains fully journaled and is labelled **observation only** in the dashboard. Its records are tagged separately from older/legacy paper records, so the 10-day forward report begins cleanly. The model records the observed tick separately from the simulated fill: Target 1 winners are credited at Target 1 rather than a more favourable tick beyond it; stop losses use the observed worse price if it gaps through the stop. Time exits are shown separately and excluded from the win-rate denominator.
 
 It never sends an order. The **Reports** page shows observed sessions, forward-policy closed-trade counts, resolved win rate, time exits, P/L per lot, average R and market split. Do not optimise from a few outcomes: retain a hold-out sample and alter one small weight group at a time.
+=======
+The **Journal** page stores a local, decision-time research snapshot for every completed **5-minute core candle** after the market, option-chain and MTF models are ready. Each snapshot contains the seven timeframe readings, all configured indicator-matrix rows, core/MTF scores and gate, reasons/conflicts, full nearest-expiry chain metrics, Hero/Scalp assessments and the candidate plan. The local SQLite file defaults to `data/nice_pro_journal.sqlite3` and can be relocated through `NICE_JOURNAL_DATABASE`.
+
+The paper tracker opens only a qualifying MTF paper plan. It records a measurable outcome when the simulated premium reaches the model stop loss (**LOSS**) or Target 1 (**WIN**); it never sends an order. The **Reports** page shows observed 10-day closed-trade counts, win rate, P/L per lot, average R and market split. Do not optimise from a few outcomes: retain a hold-out sample and alter one small weight group at a time.
+>>>>>>> Stashed changes
 
 ### 300-day Kite core backtest
 

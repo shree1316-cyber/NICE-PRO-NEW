@@ -37,7 +37,10 @@ from nice_pro.models.market import (
     Quote,
     ScalpSnapshot,
     Side,
+<<<<<<< Updated upstream
     TradePlan,
+=======
+>>>>>>> Stashed changes
 )
 
 if TYPE_CHECKING:
@@ -96,7 +99,11 @@ class MainWindow(QMainWindow):
         self._signals = DashboardSignals()
         self._quotes: dict[str, Quote] = {}
         self._analyses: dict[str, dict[int, IndicatorSnapshot]] = {"NIFTY": {}, "SENSEX": {}}
+<<<<<<< Updated upstream
         self._rendered_matrix_versions: dict[str, tuple[object, ...]] = {"NIFTY": (), "SENSEX": ()}
+=======
+        self._rendered_matrix_versions: dict[str, tuple[tuple[int, object], ...]] = {"NIFTY": (), "SENSEX": ()}
+>>>>>>> Stashed changes
         self._chains: dict[str, OptionChainSnapshot] = {}
         self._option_heroes: dict[str, OptionHeroSnapshot] = {}
         self._scalps: dict[str, ScalpSnapshot] = {}
@@ -380,6 +387,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
         for underlying in ("NIFTY", "SENSEX"):
+<<<<<<< Updated upstream
             panel, panel_layout = self._panel(f"{underlying} PAPER-FORWARD PLAN", "purple")
             active = QLabel("NO ACTIVE FORWARD PAPER POSITION")
             active.setObjectName("workspacePlan")
@@ -395,6 +403,16 @@ class MainWindow(QMainWindow):
             view["paper"] = candidate
             view["paper_active"] = active
             view["paper_policy"] = policy
+=======
+            panel, panel_layout = self._panel(f"{underlying} PAPER-TRADE PLAN", "purple")
+            detail = QLabel("No paper setup yet")
+            detail.setObjectName("workspacePlan")
+            detail.setWordWrap(True)
+            panel_layout.addWidget(detail)
+            panel_layout.addStretch()
+            layout.addWidget(panel)
+            self._analysis_views.setdefault(underlying, {})["paper"] = detail
+>>>>>>> Stashed changes
         return page
 
     def _journal_page(self) -> QWidget:
@@ -408,12 +426,20 @@ class MainWindow(QMainWindow):
             "Every completed 5-minute core candle is saved locally with all timeframe readings, the 100-indicator matrix, full nearest-expiry chain metrics, Hero/Scalp evidence, filters, conflicts and paper-plan context."
         )
         overview_layout.addWidget(self._journal_overview)
+<<<<<<< Updated upstream
         overview_layout.addWidget(self._muted("Times are displayed in IST; raw records remain stored in UTC for consistent research. These records preserve what the engine knew at the time, not hindsight scoring."))
+=======
+        overview_layout.addWidget(self._muted("These records preserve what the engine knew at the time; they are designed for later reverse-engineering, not hindsight scoring."))
+>>>>>>> Stashed changes
         layout.addWidget(overview)
         table_panel, table_layout = self._panel("LATEST DECISION RECORDS", "blue")
         self._journal_table = QTableWidget(0, 8)
         self._journal_table.setObjectName("journalTable")
+<<<<<<< Updated upstream
         self._journal_table.setHorizontalHeaderLabels(("TIME (IST)", "MARKET", "SIDE", "GRADE", "MTF", "ALIGNMENT", "5M BULL", "5M BEAR"))
+=======
+        self._journal_table.setHorizontalHeaderLabels(("TIME (UTC)", "MARKET", "SIDE", "GRADE", "MTF", "ALIGNMENT", "5M BULL", "5M BEAR"))
+>>>>>>> Stashed changes
         self._journal_table.verticalHeader().setVisible(False)
         self._journal_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._journal_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
@@ -429,16 +455,23 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
+<<<<<<< Updated upstream
         summary, summary_layout = self._panel("10-DAY PAPER-FORWARD PERFORMANCE", "green")
+=======
+        summary, summary_layout = self._panel("10-DAY PAPER-TRADE PERFORMANCE", "green")
+>>>>>>> Stashed changes
         self._report_summary = QLabel("Collecting paper-trade outcomes")
         self._report_summary.setObjectName("reportSummary")
         self._report_summary.setWordWrap(True)
         summary_layout.addWidget(self._report_summary)
         layout.addWidget(summary)
+<<<<<<< Updated upstream
         policy, policy_layout = self._panel("FORWARD-TEST POLICY & LIVE PROGRESS", "purple")
         self._report_policy = self._muted("Forward-test policy loading")
         policy_layout.addWidget(self._report_policy)
         layout.addWidget(policy)
+=======
+>>>>>>> Stashed changes
         method, method_layout = self._panel("OPTIMISATION & REVERSE-ENGINEERING DATA", "amber")
         method_layout.addWidget(self._muted(
             "For each saved decision, NICE-PRO retains: 10s/30s/1m/5m/15m/30m/1h regimes and readings; category-level matrix states; core and MTF scores; gate/alignment; bullish, bearish and conflict reasons; ATM plan; PCR, OI and OI changes; IV/skew, expected move, spread, book imbalance, estimated CVD, OTM continuation; Hero and Scalp scores."
@@ -501,10 +534,16 @@ class MainWindow(QMainWindow):
         self._system_status = self._muted("Kite: Connecting\nData: Waiting\nOrder status: Paper mode\nEngine: Active")
         system_layout.addWidget(self._system_status)
         layout.addWidget(system)
+<<<<<<< Updated upstream
         feed_health, feed_health_layout = self._panel("DATA FEED HEALTH", "purple")
         self._feed_health = self._muted("Stream: connecting\nFutures proxy: subscribing\nOption depth: subscribing")
         feed_health_layout.addWidget(self._feed_health)
         layout.addWidget(feed_health)
+=======
+        pending, pending_layout = self._panel("PENDING DATA FEEDS", "purple")
+        pending_layout.addWidget(self._muted("India VIX\nIndex futures\nMarket breadth\nGlobal cues\nBook imbalance"))
+        layout.addWidget(pending)
+>>>>>>> Stashed changes
         notices, notices_layout = self._panel("NOTIFICATIONS", "amber")
         notices_layout.addWidget(self._muted("All recommendations are decision support only. Verify the evidence and risk before acting."))
         layout.addWidget(notices)
@@ -701,6 +740,7 @@ class MainWindow(QMainWindow):
 
     def update_conviction(self, snapshot: ConvictionSnapshot) -> None:
         self._convictions[snapshot.underlying] = snapshot
+<<<<<<< Updated upstream
         policy_status = self._application.forward_policy_status(snapshot.underlying)
         conviction = self._nifty_conviction if snapshot.underlying == "NIFTY" else self._sensex_conviction
         evidence = self._nifty_evidence if snapshot.underlying == "NIFTY" else self._sensex_evidence
@@ -711,6 +751,17 @@ class MainWindow(QMainWindow):
         )
         conviction["score"].setText(
             "MTF ALIGNMENT SCORE<br>"
+=======
+        conviction = self._nifty_conviction if snapshot.underlying == "NIFTY" else self._sensex_conviction
+        evidence = self._nifty_evidence if snapshot.underlying == "NIFTY" else self._sensex_evidence
+        plan_card = self._nifty_plan if snapshot.underlying == "NIFTY" else self._sensex_plan
+        conviction["headline"].setText(f"{snapshot.grade} | {_decision_direction(snapshot)}")  # type: ignore[union-attr]
+        matrix_bull, matrix_bear, matrix_names = _matrix_state_counts(
+            self._analyses.get(snapshot.underlying, {}).get(60), self._chains.get(snapshot.underlying)
+        )
+        conviction["score"].setText(
+            "MTF CONVICTION<br>"
+>>>>>>> Stashed changes
             f"{max(snapshot.mtf_bullish_score, snapshot.mtf_bearish_score)} / 100"
         )  # type: ignore[union-attr]
         conviction["timeframes"].setText(_timeframe_strip_html(snapshot))  # type: ignore[union-attr]
@@ -728,8 +779,12 @@ class MainWindow(QMainWindow):
         conviction["gauge"].set_score(gauge_score)  # type: ignore[union-attr]
         conviction["detail"].setText(
             f"{snapshot.mtf_alignment} | Entry: {snapshot.entry_timing} | "
+<<<<<<< Updated upstream
             f"5m core audit: {snapshot.grade} {snapshot.bullish_score}/{snapshot.bearish_score} | "
             f"{_plan_status(snapshot, policy_status)}"
+=======
+            f"5m core: {snapshot.bullish_score}/{snapshot.bearish_score} | {_plan_status(snapshot)}"
+>>>>>>> Stashed changes
         )  # type: ignore[union-attr]
         evidence["positive"].setText("+ " + ("\n+ ".join(snapshot.bullish_reasons[:3]) or "No bullish evidence"))  # type: ignore[union-attr]
         evidence["negative"].setText("- " + ("\n- ".join(snapshot.bearish_reasons[:3]) or "No bearish evidence"))  # type: ignore[union-attr]
@@ -738,6 +793,7 @@ class MainWindow(QMainWindow):
             matrix_note = f"MATRIX WATCH ({matrix_bear} bearish, not core-score votes): " + ", ".join(matrix_names[:3])
             caution = f"{caution}\n{matrix_note}" if caution else matrix_note
         evidence["caution"].setText(caution)  # type: ignore[union-attr]
+<<<<<<< Updated upstream
         self._render_dashboard_plan(snapshot, plan_card, policy_status)
         self._refresh_analysis_view(snapshot.underlying)
 
@@ -770,6 +826,20 @@ class MainWindow(QMainWindow):
             f"Max loss/lot Rs. {plan.max_loss_per_lot:,.0f} | Lot {plan.lot_size}"
         )  # type: ignore[union-attr]
         self._alert_feed.setText(f"{snapshot.underlying} {snapshot.grade} qualified candidate\n{plan.option_symbol} | Forward-policy checks apply")
+=======
+        self._render_dashboard_plan(snapshot, plan_card)
+        self._refresh_analysis_view(snapshot.underlying)
+
+    def _render_dashboard_plan(self, snapshot: ConvictionSnapshot, card: dict[str, object]) -> None:
+        if snapshot.plan is None:
+            card["status"].setText("NO PAPER SETUP")  # type: ignore[union-attr]
+            card["detail"].setText("Need A/A+ grade, ATM quote, and risk inside the configured cap.")  # type: ignore[union-attr]
+            return
+        plan = snapshot.plan
+        card["status"].setText(f"PAPER ONLY | {plan.option_symbol}")  # type: ignore[union-attr]
+        card["detail"].setText(f"Entry {plan.entry:.2f} | SL {plan.stop_loss:.2f} | T1 {plan.target_1:.2f} | T2 {plan.target_2:.2f}\nMax loss/lot Rs. {plan.max_loss_per_lot:,.0f} | Lot {plan.lot_size}")  # type: ignore[union-attr]
+        self._alert_feed.setText(f"{snapshot.underlying} {snapshot.grade} paper setup\n{plan.option_symbol} | Risk-capped plan available")
+>>>>>>> Stashed changes
 
     def _refresh_analysis_view(self, underlying: str) -> None:
         view = self._analysis_views.get(underlying)
@@ -783,10 +853,14 @@ class MainWindow(QMainWindow):
         if quote is not None:
             view["live"].setText(f"{quote.last_price:,.2f}")
             view["quote_meta"].setText(f"Bid / Ask: {_price_or_dash(quote.bid)} / {_price_or_dash(quote.ask)} | Live Kite quote")
+<<<<<<< Updated upstream
         matrix_version = (
             tuple(sorted((timeframe, snapshot.calculated_at) for timeframe, snapshot in analyses.items())),
             chain.calculated_at if chain is not None else None,
         )
+=======
+        matrix_version = tuple(sorted((timeframe, snapshot.calculated_at) for timeframe, snapshot in analyses.items()))
+>>>>>>> Stashed changes
         if analyses and matrix_version != self._rendered_matrix_versions.get(underlying, ()):
             view["indicator_summary"].setText(_timeframe_summary(analyses))  # type: ignore[union-attr]
             self._refresh_indicator_tables(view["indicator_tables"], analyses, chain)  # type: ignore[arg-type]
@@ -795,15 +869,23 @@ class MainWindow(QMainWindow):
             view["option"].setText(_option_summary_html(chain))
         if conviction is not None:
             matrix_bull, matrix_bear, matrix_names = _matrix_state_counts(analysis, chain)
+<<<<<<< Updated upstream
             policy_status = self._application.forward_policy_status(underlying)
             view["score"].setText(_conviction_box_html(conviction, policy_status))
+=======
+            view["score"].setText(_conviction_box_html(conviction))
+>>>>>>> Stashed changes
             view["score_meta"].setText(
                 f"5m core score: Bull {conviction.bullish_score} / Bear {conviction.bearish_score}. "
                 "The core is an audit layer; the MTF gate controls paper-plan eligibility."
             )
             view["reasons"].setText(_reason_html(conviction, matrix_bear, matrix_names))
+<<<<<<< Updated upstream
             active_plan = self._application.paper_trades.active_plan(underlying)
             plan_text = _active_plan_html(active_plan) if active_plan is not None else _plan_html(conviction, policy_status)
+=======
+            plan_text = _plan_html(conviction)
+>>>>>>> Stashed changes
             view["plan"].setText(plan_text)
             if "paper" in view:
                 view["paper"].setText(plan_text)  # type: ignore[union-attr]
@@ -815,8 +897,12 @@ class MainWindow(QMainWindow):
         primary = analyses.get(300) or next(iter(analyses.values()))
         for category, table in tables.items():
             readings = [reading for reading in primary.readings if reading.category == category]
+<<<<<<< Updated upstream
             is_chain_snapshot = category == "Options & Flow" and chain is not None
             overrides = _option_indicator_overrides(chain) if is_chain_snapshot else {}
+=======
+            overrides = _option_indicator_overrides(chain) if category == "Options & Flow" and chain is not None else {}
+>>>>>>> Stashed changes
             table.setRowCount(len(readings))
             for row, reading in enumerate(readings):
                 cells: list[tuple[str, str, str]] = [(reading.name, "#dce8f6", reading.reason)]
@@ -827,6 +913,7 @@ class MainWindow(QMainWindow):
                     ) if timeframe_snapshot is not None else None
                     value, state, reason = overrides.get(reading.name, (candidate.value, candidate.state, candidate.reason)) if candidate is not None else ("—", "WAITING", "Awaiting timeframe history")
                     color = _state_color(state)
+<<<<<<< Updated upstream
                     if is_chain_snapshot and reading.name in overrides:
                         value = f"{value} (current)"
                         reason = f"{reason}. Current nearest-expiry chain snapshot shared across timeframe columns; not historical {timeframe}s data."
@@ -837,6 +924,10 @@ class MainWindow(QMainWindow):
                     else reading.reason
                 )
                 cells.append((reason_text, "#94a9c2", reason_text))
+=======
+                    cells.append((f"{value}\n{state}", color, reason))
+                cells.append((reading.reason, "#94a9c2", reading.reason))
+>>>>>>> Stashed changes
                 for column, (text, color, tooltip) in enumerate(cells):
                     item = QTableWidgetItem(text)
                     item.setForeground(QColor(color))
@@ -878,6 +969,7 @@ class MainWindow(QMainWindow):
         self._clock_label.setText(now.toString("hh:mm:ss AP | ddd, dd MMM"))
         self._session_clock.setText(now.toString("hh:mm:ss AP"))
         self._right_clock.setText(now.toString("hh:mm:ss AP"))
+<<<<<<< Updated upstream
         self._refresh_feed_health()
         if now.time().second() % 5 == 0:
             self._refresh_research_views()
@@ -949,6 +1041,11 @@ class MainWindow(QMainWindow):
                 )
         return status
 
+=======
+        if now.time().second() % 5 == 0:
+            self._refresh_research_views()
+
+>>>>>>> Stashed changes
     def _refresh_research_views(self) -> None:
         """Refresh local SQLite-derived research widgets without touching Kite."""
         if not hasattr(self, "_journal_table"):
@@ -957,7 +1054,11 @@ class MainWindow(QMainWindow):
         self._journal_table.setRowCount(len(decisions))
         for row, decision in enumerate(decisions):
             values = (
+<<<<<<< Updated upstream
                 decision["created_at_ist"],
+=======
+                decision["created_at"].replace("T", " ").replace("+00:00", ""),
+>>>>>>> Stashed changes
                 decision["underlying"], decision["side"], decision["grade"],
                 str(decision["mtf_score"]), decision["alignment"],
                 str(decision["core_bull"]), str(decision["core_bear"]),
@@ -969,6 +1070,7 @@ class MainWindow(QMainWindow):
                 self._journal_table.setItem(row, column, item)
         self._journal_overview.setText(
             f"{len(decisions)} latest decision snapshots shown. Full raw inputs are stored locally at {self._application.journal.path}. "
+<<<<<<< Updated upstream
             "Times shown here are IST. A snapshot is created once per completed 5-minute core candle, not per tick."
         )
         policy_states = [self._refresh_forward_paper_view(item) for item in ("NIFTY", "SENSEX")]
@@ -988,19 +1090,35 @@ class MainWindow(QMainWindow):
                 f"Observed sessions: {report['observed_sessions']}/10 | No closed forward-policy paper trades yet. "
                 "Win rate appears only after a policy position reaches its model stop, Target 1, or an end-of-day exit."
             )
+=======
+            "A snapshot is created once per completed 5-minute core candle, not per tick."
+        )
+        report = self._application.journal.performance_summary(10)
+        if report["closed_trades"] == 0:
+            summary = "No closed paper trades yet in the latest 10-day window. Win rate will appear only after paper positions have reached the model stop loss or Target 1."
+>>>>>>> Stashed changes
         else:
             rate = f"{report['win_rate']:.1f}%" if report["win_rate"] is not None else "—"
             average_r = f"{report['average_r']:.2f}R" if report["average_r"] is not None else "—"
             summary = (
+<<<<<<< Updated upstream
                 f"Observed sessions: {report['observed_sessions']}/10 | Closed: {report['closed_trades']} | "
                 f"Resolved: {report['resolved_trades']} | Wins: {report['wins']} | Losses: {report['losses']} | "
                 f"Time exits: {report['time_exits']} | Observed win rate: {rate} | Net P/L per lot: ₹{report['net_pnl_per_lot']:,.0f} | Average: {average_r}"
+=======
+                f"Closed: {report['closed_trades']} | Wins: {report['wins']} | Losses: {report['losses']} | "
+                f"Observed win rate: {rate} | Net P/L per lot: ₹{report['net_pnl_per_lot']:,.0f} | Average: {average_r}"
+>>>>>>> Stashed changes
             )
         self._report_summary.setText(summary)
         by_market = report["by_underlying"]
         if by_market:
             self._report_by_market.setText("\n".join(
+<<<<<<< Updated upstream
                 _market_performance_line(market, stats)
+=======
+                f"{market}: {stats['trades']} closed | {stats['wins']} wins | {stats['losses']} losses | observed win rate {stats['win_rate']:.1f}%"
+>>>>>>> Stashed changes
                 for market, stats in sorted(by_market.items())
             ))
         else:
@@ -1015,6 +1133,7 @@ def _underlying_for_symbol(symbol: str) -> str:
     return "NIFTY" if "NIFTY" in symbol else "SENSEX"
 
 
+<<<<<<< Updated upstream
 def _market_performance_line(market: str, stats: dict[str, object]) -> str:
     win_rate = stats.get("win_rate")
     rate = f"{float(win_rate):.1f}%" if isinstance(win_rate, (float, int)) else "â€”"
@@ -1025,6 +1144,8 @@ def _market_performance_line(market: str, stats: dict[str, object]) -> str:
     )
 
 
+=======
+>>>>>>> Stashed changes
 def _price_or_dash(value: float | None) -> str:
     return f"{value:,.2f}" if value is not None and value > 0 else "—"
 
@@ -1075,6 +1196,7 @@ def _decision_direction(snapshot: ConvictionSnapshot) -> str:
     return "WAIT"
 
 
+<<<<<<< Updated upstream
 def _plan_status(
     snapshot: ConvictionSnapshot, policy_status: dict[str, object] | None = None
 ) -> str:
@@ -1088,6 +1210,10 @@ def _plan_status(
     if not policy_status.get("market_eligible"):
         return "Observation only; market not policy-validated"
     return "Forward-policy candidate; checks pending"
+=======
+def _plan_status(snapshot: ConvictionSnapshot) -> str:
+    return "Paper plan allowed" if snapshot.plan is not None else "Paper plan blocked / waiting"
+>>>>>>> Stashed changes
 
 
 def _timeframe_strip_html(snapshot: ConvictionSnapshot) -> str:
@@ -1106,9 +1232,13 @@ def _timeframe_strip_html(snapshot: ConvictionSnapshot) -> str:
     return "&nbsp;&nbsp;".join(parts)
 
 
+<<<<<<< Updated upstream
 def _conviction_box_html(
     snapshot: ConvictionSnapshot, policy_status: dict[str, object] | None = None
 ) -> str:
+=======
+def _conviction_box_html(snapshot: ConvictionSnapshot) -> str:
+>>>>>>> Stashed changes
     """Fast-scan multi-timeframe summary used on the NIFTY/SENSEX workspaces."""
     mtf_score = max(snapshot.mtf_bullish_score, snapshot.mtf_bearish_score)
     conflict = snapshot.conflicts[0] if snapshot.conflicts else "None"
@@ -1116,6 +1246,7 @@ def _conviction_box_html(
     action = _decision_direction(snapshot)
     decision_color = "#67e8a5" if snapshot.side is not Side.NEUTRAL else "#facc15"
     return (
+<<<<<<< Updated upstream
         f"<span style='color:#d8b4fe; font-size:17px; font-weight:900'>MTF ALIGNMENT SCORE: {mtf_score} / 100</span><br>"
         f"<span style='font-size:12px'>{_timeframe_strip_html(snapshot)}</span><br>"
         f"<span>Alignment: <b>{snapshot.mtf_alignment}</b></span><br>"
@@ -1123,6 +1254,13 @@ def _conviction_box_html(
         f"<span>MTF direction: <b style='color:{decision_color}'>{action}</b></span><br>"
         f"<span>5m core audit: <b>{snapshot.grade} | Bull {snapshot.bullish_score} / Bear {snapshot.bearish_score}</b></span><br>"
         f"<span>Forward-policy status: <b>{_plan_status(snapshot, policy_status)}</b></span><br>"
+=======
+        f"<span style='color:#d8b4fe; font-size:17px; font-weight:900'>MTF CONVICTION: {mtf_score} / 100</span><br>"
+        f"<span style='font-size:12px'>{_timeframe_strip_html(snapshot)}</span><br>"
+        f"<span>Alignment: <b>{snapshot.mtf_alignment}</b></span><br>"
+        f"<span>Entry timing: <b>{snapshot.entry_timing}</b></span><br>"
+        f"<span>Decision: <b style='color:{decision_color}'>{snapshot.grade} | {action} | {_plan_status(snapshot)}</b></span><br>"
+>>>>>>> Stashed changes
         f"<span>Conflict: <b style='color:{conflict_color}'>{conflict}</b></span>"
     )
 
@@ -1141,6 +1279,7 @@ def _indicator_html(analysis: IndicatorSnapshot) -> str:
 
 
 def _option_summary_html(chain: OptionChainSnapshot) -> str:
+<<<<<<< Updated upstream
     coverage = (
         f"Nearest expiry coverage: <b>{chain.fresh_contracts}/{chain.registered_contracts} fresh</b> "
         f"({chain.quoted_contracts} quoted)"
@@ -1153,6 +1292,8 @@ def _option_summary_html(chain: OptionChainSnapshot) -> str:
         if chain.oldest_quote_age_seconds is not None and chain.atm_quote_age_seconds is not None
         else "Quote freshness: <b>ATM pair warming up</b>"
     )
+=======
+>>>>>>> Stashed changes
     return "<br>".join((
         f"ATM strike: <b>{_number(chain.atm_strike, 0)}</b>",
         f"PCR (OI): <b>{_number(chain.put_call_ratio_oi, 2)}</b>",
@@ -1161,22 +1302,36 @@ def _option_summary_html(chain: OptionChainSnapshot) -> str:
         f"ATM straddle / expected move: <b>{_number(chain.expected_move)}</b>",
         f"ATM bid-ask spread (direct): <b>{_number(chain.atm_bid_ask_spread)}</b>",
         f"ATM top-5 book imbalance (direct): <b>{_signed(chain.atm_book_imbalance)}</b>",
+<<<<<<< Updated upstream
         f"ATM CVD estimate (derived, not true tape): <b>{_number(chain.atm_estimated_cvd, 0)}</b>",
         f"OTM continuation (derived): <b>{_signed(chain.otm_continuation)}</b>",
         coverage,
         quote_age,
         "<span style='color:#67e8a5'>Direct: LTP/OI/bid/ask/top-5 depth. Derived: estimated CVD/OTM continuation. Later expiries are excluded.</span>",
+=======
+        f"ATM estimated CVD: <b>{_number(chain.atm_estimated_cvd, 0)}</b>",
+        f"OTM continuation (derived): <b>{_signed(chain.otm_continuation)}</b>",
+        "<span style='color:#67e8a5'>Complete nearest-expiry chain when all contracts receive a quote; later expiries are excluded.</span>",
+>>>>>>> Stashed changes
     ))
 
 
 def _option_hero_html(hero: OptionHeroSnapshot) -> str:
+<<<<<<< Updated upstream
     """Compact raw chain-bias card; it never implies executable approval."""
+=======
+    """Compact paper-only chain conviction card for the Options workspace."""
+>>>>>>> Stashed changes
     score = max(hero.bullish_score, hero.bearish_score)
     color = "#67e8a5" if hero.side is Side.BUY else "#fda4af" if hero.side is Side.SELL else "#facc15"
     action = "BUY CALL" if hero.side is Side.BUY else "BUY PUT" if hero.side is Side.SELL else "WAIT"
     evidence = "<br>".join(hero.reasons[:2]) or "Waiting for sufficient chain evidence"
     if hero.plan is None:
+<<<<<<< Updated upstream
         plan = "Chain-only paper setup blocked / waiting"
+=======
+        plan = "Paper setup blocked / waiting"
+>>>>>>> Stashed changes
     else:
         plan = (
             f"{hero.plan.option_symbol}<br>"
@@ -1185,17 +1340,28 @@ def _option_hero_html(hero: OptionHeroSnapshot) -> str:
         )
     return (
         f"<b>{hero.underlying}</b><br>"
+<<<<<<< Updated upstream
         f"<span style='color:{color}; font-size:15px; font-weight:900'>RAW CHAIN BIAS: {hero.grade} | {action} | {score}/100</span><br>"
         f"<span style='color:#dce8f6'>Bull {hero.bullish_score} / Bear {hero.bearish_score} | Evidence quality {hero.confidence}%</span><br>"
         f"<span style='color:#a7f3d0'>{evidence}</span><br>"
         f"<span style='color:#f5d0fe'>{plan}</span><br>"
         "<span style='color:#94a3b8'>Chain-only evidence; not forward-policy validation or a probability of profit.</span>"
+=======
+        f"<span style='color:{color}; font-size:15px; font-weight:900'>{hero.grade} | {action} | {score}/100</span><br>"
+        f"<span style='color:#dce8f6'>Bull {hero.bullish_score} / Bear {hero.bearish_score} | Confidence {hero.confidence}%</span><br>"
+        f"<span style='color:#a7f3d0'>{evidence}</span><br>"
+        f"<span style='color:#f5d0fe'>{plan}</span>"
+>>>>>>> Stashed changes
     )
 
 
 def _scalp_html(scalp: ScalpSnapshot) -> str:
+<<<<<<< Updated upstream
     execution_action = "BUY CE" if scalp.side is Side.BUY else "BUY PE" if scalp.side is Side.SELL else "WAIT / CONFLICT"
     raw_action = "BUY CE" if scalp.raw_side is Side.BUY else "BUY PE" if scalp.raw_side is Side.SELL else "NEUTRAL"
+=======
+    action = "BUY CE" if scalp.side is Side.BUY else "BUY PE" if scalp.side is Side.SELL else "WAIT"
+>>>>>>> Stashed changes
     color = "#67e8a5" if scalp.side is Side.BUY else "#fb7185" if scalp.side is Side.SELL else "#facc15"
     reasons = "<br>".join(scalp.reasons[:2]) or "Waiting for aligned live scalp evidence"
     if scalp.plan is None:
@@ -1208,8 +1374,12 @@ def _scalp_html(scalp: ScalpSnapshot) -> str:
         )
     return (
         f"<b>{scalp.underlying}</b> "
+<<<<<<< Updated upstream
         f"<span style='color:{color}; font-size:14px; font-weight:900'>{execution_action} | Raw evidence {scalp.score}/100 | Evidence quality {scalp.confidence}%</span><br>"
         f"<span style='color:#dce8f6'>Raw directional bias: {raw_action} | Setup status: {scalp.setup_status}</span><br>"
+=======
+        f"<span style='color:{color}; font-size:14px; font-weight:900'>{action} | {scalp.score}/100 | Confidence {scalp.confidence}%</span><br>"
+>>>>>>> Stashed changes
         f"<span style='color:#a7f3d0'>{reasons}</span><br>"
         f"<span style='color:#f5d0fe'>{plan}</span>"
     )
@@ -1292,7 +1462,11 @@ def _timeframe_summary(analyses: dict[int, IndicatorSnapshot]) -> str:
     return " | ".join(summaries)
 
 
+<<<<<<< Updated upstream
 def _plan_html(snapshot: ConvictionSnapshot, policy_status: dict[str, object] | None = None) -> str:
+=======
+def _plan_html(snapshot: ConvictionSnapshot) -> str:
+>>>>>>> Stashed changes
     if snapshot.plan is None:
         return (
             "<b style='color:#d8b4fe'>NO PAPER SETUP</b><br><br>"
@@ -1300,6 +1474,7 @@ def _plan_html(snapshot: ConvictionSnapshot, policy_status: dict[str, object] | 
             "Requires 1m/5m alignment, no opposing higher timeframe, A/A+ grade, an ATM quote, and risk inside the configured maximum loss per lot."
         )
     plan = snapshot.plan
+<<<<<<< Updated upstream
     if policy_status is not None and not policy_status.get("market_eligible"):
         heading = "OBSERVATION ONLY â€” NOT FORWARD-POLICY VALIDATED"
         note = "This market remains journaled for research. No forward paper position can open under the active policy."
@@ -1324,6 +1499,9 @@ def _active_plan_html(plan: TradePlan) -> str:
         f"Maximum loss / lot: <b>Rs. {plan.max_loss_per_lot:,.0f}</b><br>Lot size: <b>{plan.lot_size}</b><br><br>"
         "<span style='color:#facc15'>Paper-only position; no broker order exists.</span>"
     )
+=======
+    return f"<b style='color:#d8b4fe'>PAPER ONLY | {plan.option_symbol}</b><br><br>Entry: <b>{plan.entry:.2f}</b><br>Stop loss: <b>{plan.stop_loss:.2f}</b><br>Target 1: <b>{plan.target_1:.2f}</b><br>Target 2: <b>{plan.target_2:.2f}</b><br>Maximum loss / lot: <b>Rs. {plan.max_loss_per_lot:,.0f}</b><br>Lot size: <b>{plan.lot_size}</b><br><br><span style='color:#facc15'>No order is submitted.</span>"
+>>>>>>> Stashed changes
 
 
 def _number(value: float | None, decimals: int = 2, suffix: str = "") -> str:
@@ -1380,8 +1558,13 @@ def _option_indicator_overrides(chain: OptionChainSnapshot) -> dict[str, tuple[s
         "ATM CE Premium Velocity": (_signed(call_velocity), "BULLISH" if call_velocity is not None and call_velocity > 0 else "BEARISH" if call_velocity is not None and call_velocity < 0 else "NEUTRAL", "Observed ATM call premium change per second"),
         "ATM PE Premium Velocity": (_signed(put_velocity), "BEARISH" if put_velocity is not None and put_velocity > 0 else "BULLISH" if put_velocity is not None and put_velocity < 0 else "NEUTRAL", "Observed ATM put premium change per second"),
         "Bid-Ask Spread": (_number(chain.atm_bid_ask_spread), "INFO", "Direct ATM CE/PE average bid-ask spread from Kite top-five depth"),
+<<<<<<< Updated upstream
         "ATM Book Imbalance": (_signed(chain.atm_book_imbalance), "INFO" if chain.atm_book_imbalance is not None else "WAITING", "Direct top-five ATM CE/PE depth. It is a liquidity context, not a directional vote."),
         "Estimated CVD": (_number(chain.atm_estimated_cvd, 0), _direction_state(chain.atm_estimated_cvd), "Derived CVD estimate from tick price versus bid/ask and available trade size; Kite has no true exchange tape or aggressor flag"),
+=======
+        "ATM Book Imbalance": (_signed(chain.atm_book_imbalance), _direction_state(chain.atm_book_imbalance), "Direct top-five ATM CE/PE bid quantity less ask quantity, normalized"),
+        "Estimated CVD": (_number(chain.atm_estimated_cvd, 0), _direction_state(chain.atm_estimated_cvd), "Estimated from tick price versus bid/ask and available trade size; Kite has no true aggressor flag"),
+>>>>>>> Stashed changes
         "OTM Continuation": (_signed(chain.otm_continuation), _direction_state(chain.otm_continuation), "Derived from first OTM call versus put premium velocity; not an exchange-labelled signal"),
     }
 

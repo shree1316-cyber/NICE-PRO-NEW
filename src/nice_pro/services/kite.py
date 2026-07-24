@@ -13,7 +13,10 @@ from nice_pro.models.market import Candle, OptionContract, OptionType, Quote
 
 TickCallback = Callable[[Quote], None]
 StatusCallback = Callable[[str], None]
+<<<<<<< Updated upstream
 StreamResetCallback = Callable[[str], None]
+=======
+>>>>>>> Stashed changes
 
 
 class KiteService:
@@ -27,6 +30,7 @@ class KiteService:
         self._symbols_lock = RLock()
         self._instrument_cache: dict[str, list[dict[str, object]]] = {}
         self._instrument_lock = RLock()
+<<<<<<< Updated upstream
         self._health_lock = RLock()
         self._stream_state = "OFFLINE"
         self._last_tick_at: datetime | None = None
@@ -34,6 +38,8 @@ class KiteService:
         self._reconnect_count = 0
         self._outage_reset_requested = False
         self._manual_stop_requested = False
+=======
+>>>>>>> Stashed changes
 
     @property
     def configured(self) -> bool:
@@ -53,6 +59,7 @@ class KiteService:
 
         return await asyncio.to_thread(self.client().profile)
 
+<<<<<<< Updated upstream
     def stream_health(self, stale_after_seconds: float = 10.0) -> dict[str, object]:
         """Return a presentation-safe live/reconnecting/stale data status.
 
@@ -81,6 +88,14 @@ class KiteService:
         This is read-only historical data. Call it from a worker thread, not from
         the PySide desktop thread.
         """
+=======
+    def historical_minute_candles(self, subscription: Subscription, lookback_days: int = 2) -> list[Candle]:
+        """Fetch completed one-minute candles for indicator warm-up.
+
+        This is read-only historical data. Call it from a worker thread, not from
+        the PySide desktop thread.
+        """
+>>>>>>> Stashed changes
         end = datetime.now(timezone.utc)
         rows = self.client().historical_data(
             subscription.instrument_token,
@@ -258,7 +273,10 @@ class KiteService:
         subscriptions: Sequence[Subscription],
         on_quote: TickCallback,
         on_status: StatusCallback | None = None,
+<<<<<<< Updated upstream
         on_stream_reset: StreamResetCallback | None = None,
+=======
+>>>>>>> Stashed changes
     ) -> None:
         """Start a threaded KiteTicker subscription for the supplied instruments only."""
         if not self.configured:
@@ -269,9 +287,12 @@ class KiteService:
             logger.warning("Kite stream is already running.")
             return
 
+<<<<<<< Updated upstream
         with self._health_lock:
             self._manual_stop_requested = False
 
+=======
+>>>>>>> Stashed changes
         with self._symbols_lock:
             self._symbols = {subscription.instrument_token: subscription.symbol for subscription in subscriptions}
         ticker = KiteTicker(self._settings.kite_api_key, self._settings.kite_access_token)
@@ -281,6 +302,7 @@ class KiteService:
             if on_status is not None:
                 on_status(message)
 
+<<<<<<< Updated upstream
         def set_state(state: str) -> None:
             with self._health_lock:
                 self._stream_state = state
@@ -294,17 +316,22 @@ class KiteService:
             if on_stream_reset is not None:
                 on_stream_reset(reason)
 
+=======
+>>>>>>> Stashed changes
         def on_connect(ws, response) -> None:  # type: ignore[no-untyped-def]
             del response
             with self._symbols_lock:
                 tokens = list(self._symbols)
             ws.subscribe(tokens)
             ws.set_mode(ws.MODE_FULL, tokens)
+<<<<<<< Updated upstream
             with self._health_lock:
                 self._stream_state = "CONNECTED"
                 # A completed reconnect has a fresh period in which a later
                 # outage must request another rebase.
                 self._outage_reset_requested = False
+=======
+>>>>>>> Stashed changes
             status(f"connected; subscribed to {len(tokens)} instruments")
 
         tick_error_reported = False
@@ -312,10 +339,13 @@ class KiteService:
         def on_ticks(ws, ticks) -> None:  # type: ignore[no-untyped-def]
             nonlocal tick_error_reported
             del ws
+<<<<<<< Updated upstream
             if ticks:
                 with self._health_lock:
                     self._stream_state = "LIVE"
                     self._last_tick_at = datetime.now(timezone.utc)
+=======
+>>>>>>> Stashed changes
             for tick in ticks:
                 token = tick.get("instrument_token")
                 with self._symbols_lock:
@@ -359,6 +389,7 @@ class KiteService:
 
         ticker.on_connect = on_connect
         ticker.on_ticks = on_ticks
+<<<<<<< Updated upstream
         def on_close(ws, code, reason) -> None:  # type: ignore[no-untyped-def]
             del ws
             with self._health_lock:
@@ -399,6 +430,12 @@ class KiteService:
         ticker.on_error = on_error
         ticker.on_reconnect = on_reconnect
         ticker.on_noreconnect = on_noreconnect
+=======
+        ticker.on_close = lambda ws, code, reason: status(f"closed ({code}): {reason}")
+        ticker.on_error = lambda ws, code, reason: status(f"error ({code}): {reason}")
+        ticker.on_reconnect = lambda ws, attempts_count: status(f"reconnecting (attempt {attempts_count})")
+        ticker.on_noreconnect = lambda ws: status("reconnect limit reached")
+>>>>>>> Stashed changes
         self._ticker = ticker
         status("connecting")
         ticker.connect(threaded=True)
@@ -440,12 +477,17 @@ class KiteService:
 
     def stop_stream(self) -> None:
         if self._ticker is not None:
+<<<<<<< Updated upstream
             with self._health_lock:
                 self._manual_stop_requested = True
             self._ticker.close()
             self._ticker = None
             with self._health_lock:
                 self._stream_state = "STOPPED"
+=======
+            self._ticker.close()
+            self._ticker = None
+>>>>>>> Stashed changes
             logger.info("Kite stream stopped.")
 
 

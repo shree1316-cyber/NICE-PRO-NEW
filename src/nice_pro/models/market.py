@@ -75,9 +75,12 @@ class OptionMetric:
     bid_depth_quantity: int | None = None
     ask_depth_quantity: int | None = None
     estimated_cvd: int | None = None
+<<<<<<< Updated upstream
     # Retained so every displayed chain field can be checked for freshness.
     # A quote timestamp is data provenance, not an exchange trade timestamp.
     quote_received_at: datetime | None = None
+=======
+>>>>>>> Stashed changes
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +102,7 @@ class OptionChainSnapshot:
     atm_book_imbalance: float | None = None
     atm_estimated_cvd: int | None = None
     otm_continuation: float | None = None
+<<<<<<< Updated upstream
     # Coverage is deliberately explicit.  A nearest-expiry chain is complete
     # only once every registered contract has supplied a fresh quote.
     registered_contracts: int = 0
@@ -106,6 +110,8 @@ class OptionChainSnapshot:
     fresh_contracts: int = 0
     oldest_quote_age_seconds: float | None = None
     atm_quote_age_seconds: float | None = None
+=======
+>>>>>>> Stashed changes
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,10 +156,13 @@ class ScalpSnapshot:
     reasons: tuple[str, ...] = ()
     conflicts: tuple[str, ...] = ()
     plan: TradePlan | None = None
+<<<<<<< Updated upstream
     # ``side`` is the safe, execution-facing direction. ``raw_side`` remains
     # visible for research when option-flow evidence disagrees with timing.
     raw_side: Side = Side.NEUTRAL
     setup_status: str = "BLOCKED"
+=======
+>>>>>>> Stashed changes
 
 
 @dataclass(frozen=True, slots=True)

@@ -12,8 +12,12 @@ import json
 import sqlite3
 from collections.abc import Mapping
 from contextlib import closing
+<<<<<<< Updated upstream
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+=======
+from datetime import datetime, timezone
+>>>>>>> Stashed changes
 from pathlib import Path
 from threading import RLock
 from typing import Any
@@ -28,6 +32,7 @@ from nice_pro.models.market import (
 )
 
 
+<<<<<<< Updated upstream
 @dataclass(frozen=True, slots=True)
 class ActivePaperPosition:
     """A durable paper position reconstructed from the local journal."""
@@ -40,6 +45,8 @@ class ActivePaperPosition:
     decision_id: int | None
 
 
+=======
+>>>>>>> Stashed changes
 class ResearchJournal:
     """Local durable journal for decision snapshots and simulated outcomes."""
 
@@ -74,6 +81,7 @@ class ResearchJournal:
         }
         return self._insert("DECISION", conviction.underlying, payload)
 
+<<<<<<< Updated upstream
     def record_paper_open(
         self,
         plan: TradePlan,
@@ -82,12 +90,18 @@ class ResearchJournal:
         policy_id: str | None = None,
     ) -> int:
         """Persist an opening before the paper tracker treats it as active."""
+=======
+    def record_paper_open(self, plan: TradePlan, source: str, decision_id: int | None) -> int:
+>>>>>>> Stashed changes
         return self._insert(
             "PAPER_OPEN",
             plan.underlying,
             {
                 "source": source,
+<<<<<<< Updated upstream
                 "policy_id": policy_id,
+=======
+>>>>>>> Stashed changes
                 "decision_id": decision_id,
                 "plan": _plan_payload(plan),
                 "status": "ACTIVE",
@@ -101,6 +115,7 @@ class ResearchJournal:
         exit_price: float,
         outcome: str,
         exit_reason: str,
+<<<<<<< Updated upstream
         observed_price: float | None = None,
         source: str | None = None,
         policy_id: str | None = None,
@@ -111,6 +126,9 @@ class ResearchJournal:
         winner or at the stop price on a loss so a tick beyond the threshold is
         not silently counted as a better fill than the model promised.
         """
+=======
+    ) -> int:
+>>>>>>> Stashed changes
         risk_per_unit = max(plan.entry - plan.stop_loss, 0.000001)
         pnl_per_lot = (exit_price - plan.entry) * plan.lot_size
         r_multiple = (exit_price - plan.entry) / risk_per_unit
@@ -121,6 +139,7 @@ class ResearchJournal:
                 "open_id": open_id,
                 "plan": _plan_payload(plan),
                 "exit_price": round(exit_price, 4),
+<<<<<<< Updated upstream
                 "observed_price": round(observed_price, 4) if observed_price is not None else None,
                 "outcome": outcome,
                 "exit_reason": exit_reason,
@@ -129,6 +148,13 @@ class ResearchJournal:
                 "pnl_per_lot": round(pnl_per_lot, 2),
                 "r_multiple": round(r_multiple, 3),
                 "model_note": "Paper-only model fill; no order is sent. Observed price is retained separately.",
+=======
+                "outcome": outcome,
+                "exit_reason": exit_reason,
+                "pnl_per_lot": round(pnl_per_lot, 2),
+                "r_multiple": round(r_multiple, 3),
+                "model_note": "Paper model closes at stop loss or Target 1; no order is sent.",
+>>>>>>> Stashed changes
             },
         )
 
@@ -146,7 +172,10 @@ class ResearchJournal:
                 {
                     "id": row[0],
                     "created_at": row[1],
+<<<<<<< Updated upstream
                     "created_at_ist": _format_ist(row[1]),
+=======
+>>>>>>> Stashed changes
                     "underlying": row[2],
                     "side": conviction["side"],
                     "grade": conviction["grade"],
@@ -158,6 +187,7 @@ class ResearchJournal:
             )
         return result
 
+<<<<<<< Updated upstream
     def active_paper_positions(self, source: str | None = None) -> list[ActivePaperPosition]:
         """Return unmatched paper opens, including positions from a prior restart."""
         opens = self._query(
@@ -252,10 +282,30 @@ class ResearchJournal:
             )
             stats["trades"] += 1
             stats["sessions"].add(_parse_timestamp(created_at).astimezone(_IST).date().isoformat())
+=======
+    def performance_summary(self, lookback_days: int = 10) -> dict[str, Any]:
+        """Calculate observed paper outcomes, never a promised win rate."""
+        rows = self._query(
+            "SELECT created_at, underlying, payload_json FROM journal_records "
+            "WHERE record_type = 'PAPER_CLOSE' AND created_at >= datetime('now', ?) "
+            "ORDER BY id ASC",
+            (f"-{max(1, lookback_days)} days",),
+        )
+        closed = [(row[0], row[1], json.loads(row[2])) for row in rows]
+        wins = [item for item in closed if item[2].get("outcome") == "WIN"]
+        losses = [item for item in closed if item[2].get("outcome") == "LOSS"]
+        pnl = sum(float(item[2].get("pnl_per_lot", 0)) for item in closed)
+        r_values = [float(item[2].get("r_multiple", 0)) for item in closed]
+        grouped: dict[str, dict[str, int]] = {}
+        for _, underlying, payload in closed:
+            stats = grouped.setdefault(underlying, {"trades": 0, "wins": 0, "losses": 0})
+            stats["trades"] += 1
+>>>>>>> Stashed changes
             if payload.get("outcome") == "WIN":
                 stats["wins"] += 1
             elif payload.get("outcome") == "LOSS":
                 stats["losses"] += 1
+<<<<<<< Updated upstream
             elif payload.get("outcome") == "TIME_EXIT":
                 stats["time_exits"] += 1
         for stats in grouped.values():
@@ -280,6 +330,20 @@ class ResearchJournal:
             "average_r": round(sum(r_values) / len(r_values), 3) if r_values else None,
             "by_underlying": grouped,
             "method_note": "Observed paper outcomes only. Win rate excludes time exits; optimise only after an adequate out-of-sample sample.",
+=======
+        for stats in grouped.values():
+            stats["win_rate"] = round(100 * stats["wins"] / stats["trades"], 1) if stats["trades"] else 0.0
+        return {
+            "lookback_days": lookback_days,
+            "closed_trades": len(closed),
+            "wins": len(wins),
+            "losses": len(losses),
+            "win_rate": round(100 * len(wins) / len(closed), 1) if closed else None,
+            "net_pnl_per_lot": round(pnl, 2),
+            "average_r": round(sum(r_values) / len(r_values), 3) if r_values else None,
+            "by_underlying": grouped,
+            "method_note": "Observed paper outcomes only. Optimise after an adequate out-of-sample sample; do not infer an edge from a small sample.",
+>>>>>>> Stashed changes
         }
 
     def _create_schema(self) -> None:
@@ -317,6 +381,7 @@ def _plan_payload(plan: TradePlan | None) -> dict[str, Any] | None:
     if plan is None:
         return None
     return {
+<<<<<<< Updated upstream
         "underlying": plan.underlying, "symbol": plan.option_symbol, "side": plan.side.value, "entry": plan.entry,
         "stop_loss": plan.stop_loss, "target_1": plan.target_1, "target_2": plan.target_2,
         "max_loss_per_lot": plan.max_loss_per_lot, "lot_size": plan.lot_size,
@@ -366,6 +431,14 @@ def _format_ist(value: str) -> str:
 _IST = timezone(timedelta(hours=5, minutes=30), name="IST")
 
 
+=======
+        "symbol": plan.option_symbol, "side": plan.side.value, "entry": plan.entry,
+        "stop_loss": plan.stop_loss, "target_1": plan.target_1, "target_2": plan.target_2,
+        "max_loss_per_lot": plan.max_loss_per_lot, "lot_size": plan.lot_size,
+    }
+
+
+>>>>>>> Stashed changes
 def _conviction_payload(item: ConvictionSnapshot) -> dict[str, Any]:
     return {
         "side": item.side.value, "grade": item.grade.value, "core_bull": item.bullish_score,
@@ -403,19 +476,28 @@ def _chain_payload(item: OptionChainSnapshot) -> dict[str, Any]:
         "max_pain": item.observed_max_pain, "iv_skew": item.iv_skew, "expected_move": item.expected_move,
         "atm_spread": item.atm_bid_ask_spread, "atm_book_imbalance": item.atm_book_imbalance,
         "estimated_cvd": item.atm_estimated_cvd, "otm_continuation": item.otm_continuation,
+<<<<<<< Updated upstream
         "registered_contracts": item.registered_contracts,
         "quoted_contracts": item.quoted_contracts,
         "fresh_contracts": item.fresh_contracts,
         "oldest_quote_age_seconds": item.oldest_quote_age_seconds,
         "atm_quote_age_seconds": item.atm_quote_age_seconds,
+=======
+>>>>>>> Stashed changes
         "strikes": [
             {"symbol": metric.contract.symbol, "strike": metric.contract.strike, "type": metric.contract.option_type.value,
              "ltp": metric.last_price, "oi": metric.open_interest, "oi_change": metric.open_interest_change,
              "iv": metric.implied_volatility, "velocity": metric.premium_velocity, "bid": metric.bid, "ask": metric.ask,
+<<<<<<< Updated upstream
               "top_bid_qty": metric.top_bid_quantity, "top_ask_qty": metric.top_ask_quantity,
               "depth_bid_qty": metric.bid_depth_quantity, "depth_ask_qty": metric.ask_depth_quantity,
               "estimated_cvd": metric.estimated_cvd,
               "quote_received_at": metric.quote_received_at.isoformat() if metric.quote_received_at else None}
+=======
+             "top_bid_qty": metric.top_bid_quantity, "top_ask_qty": metric.top_ask_quantity,
+             "depth_bid_qty": metric.bid_depth_quantity, "depth_ask_qty": metric.ask_depth_quantity,
+             "estimated_cvd": metric.estimated_cvd}
+>>>>>>> Stashed changes
             for metric in item.metrics
         ],
     }
@@ -432,6 +514,10 @@ def _hero_payload(item: OptionHeroSnapshot | None) -> dict[str, Any] | None:
 def _scalp_payload(item: ScalpSnapshot | None) -> dict[str, Any] | None:
     if item is None:
         return None
+<<<<<<< Updated upstream
     return {"side": item.side.value, "raw_side": item.raw_side.value, "setup_status": item.setup_status,
             "score": item.score, "confidence": item.confidence,
+=======
+    return {"side": item.side.value, "score": item.score, "confidence": item.confidence,
+>>>>>>> Stashed changes
             "reasons": list(item.reasons), "conflicts": list(item.conflicts), "plan": _plan_payload(item.plan)}

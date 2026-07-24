@@ -1,8 +1,12 @@
 """Application composition root."""
 
 from collections.abc import Callable
+<<<<<<< Updated upstream
 from datetime import datetime, timezone
 from threading import Event, RLock, Thread
+=======
+from threading import RLock, Thread
+>>>>>>> Stashed changes
 from time import monotonic, sleep
 
 from loguru import logger
@@ -21,7 +25,10 @@ from nice_pro.engines.option_hero import OptionHeroEngine
 from nice_pro.engines.scalp import ScalpEngine
 from nice_pro.journal.store import ResearchJournal
 from nice_pro.models.market import Candle, ConvictionSnapshot, IndicatorSnapshot, MarketSnapshot, OptionChainSnapshot, OptionHeroSnapshot, Quote, ScalpSnapshot
+<<<<<<< Updated upstream
 from nice_pro.papertrade.policy import ForwardTestPolicy
+=======
+>>>>>>> Stashed changes
 from nice_pro.papertrade.tracker import PaperTradeTracker
 from nice_pro.services.kite import KiteService
 
@@ -41,21 +48,30 @@ class Application:
         self.scalp = ScalpEngine()
         self.conviction = ConvictionEngine()
         self.journal = ResearchJournal(settings.journal_database_path)
+<<<<<<< Updated upstream
         self.forward_policy = ForwardTestPolicy(
             policy_id=settings.forward_test_policy_id,
             enabled=settings.forward_test_enabled,
         )
         self.paper_trades = PaperTradeTracker(self.journal, self.forward_policy)
+=======
+        self.paper_trades = PaperTradeTracker(self.journal)
+>>>>>>> Stashed changes
         self.alerts = QualityAlertEngine()
         self.kite = KiteService(settings)
         self._analysis_by_underlying: dict[str, dict[int, IndicatorSnapshot]] = {}
         self._options_by_underlying: dict[str, OptionChainSnapshot] = {}
         self._option_lock = RLock()
+<<<<<<< Updated upstream
         self._journal_lock = RLock()
         self._stop_requested = Event()
         self._last_option_publish: dict[str, float] = {}
         self._last_journal_candle: dict[str, object] = {}
         self._pending_journal_candle: dict[str, object] = {}
+=======
+        self._last_option_publish: dict[str, float] = {}
+        self._last_journal_candle: dict[str, object] = {}
+>>>>>>> Stashed changes
         # A complete nearest-expiry chain can contain hundreds of contracts.
         # Ticks are retained at full stream speed, while the expensive chain
         # analytics and table repaint are intentionally sampled at 1 Hz.
@@ -95,6 +111,7 @@ class Application:
         self._status_listeners.append(listener)
 
     def start(self) -> None:
+<<<<<<< Updated upstream
         self._stop_requested.clear()
         logger.info("Application started (paper trading only: {}).", self.settings.paper_trading_only)
         if self.forward_policy.enabled:
@@ -111,12 +128,19 @@ class Application:
                 self.publish_status,
                 self._on_stream_reset,
             )
+=======
+        logger.info("Application started (paper trading only: {}).", self.settings.paper_trading_only)
+        if self.settings.kite_configured:
+            self.publish_status("starting Kite market-data services")
+            self.kite.start_stream(self.settings.subscriptions, self.process_quote, self.publish_status)
+>>>>>>> Stashed changes
             Thread(target=self._seed_history, name="candle-history-seed", daemon=True).start()
             Thread(target=self._discover_futures, name="futures-volume-feed", daemon=True).start()
             Thread(target=self._discover_option_chain, name="option-universe", daemon=True).start()
         else:
             self.publish_status("Kite credentials not configured — dashboard is in offline mode")
 
+<<<<<<< Updated upstream
         Thread(target=self._run_eod_paper_guard, name="paper-eod-guard", daemon=True).start()
 
     def stop(self) -> None:
@@ -153,6 +177,12 @@ class Application:
             "global_cues": "NOT CONNECTED",
         }
 
+=======
+    def stop(self) -> None:
+        self.kite.stop_stream()
+        logger.info("Application stopped.")
+
+>>>>>>> Stashed changes
     def process_quote(self, quote: Quote) -> None:
         future_underlying = self._futures_by_token.get(quote.instrument_token)
         if future_underlying is not None:
@@ -161,9 +191,13 @@ class Application:
             update = self.market_data.process(quote)
             for candle in update.closed_candles:
                 self.history.append(candle)
+<<<<<<< Updated upstream
                 self._publish_analysis(
                     self._spot_symbols[future_underlying], candle.timeframe_seconds
                 )
+=======
+                self._publish_analysis(self._spot_symbols[future_underlying], candle.timeframe_seconds)
+>>>>>>> Stashed changes
             return
         if self.options.is_option_token(quote.instrument_token):
             chain: OptionChainSnapshot | None = None
@@ -184,11 +218,15 @@ class Application:
             listener(update.snapshot)
         for candle in update.closed_candles:
             self.history.append(candle)
+<<<<<<< Updated upstream
             self._publish_analysis(
                 candle.symbol,
                 candle.timeframe_seconds,
                 journal_eligible=candle.timeframe_seconds == 300,
             )
+=======
+            self._publish_analysis(candle.symbol, candle.timeframe_seconds)
+>>>>>>> Stashed changes
 
     def publish_status(self, message: str) -> None:
         for listener in tuple(self._status_listeners):
@@ -283,9 +321,13 @@ class Application:
     def _underlying_from_option_symbol(symbol: str) -> str:
         return "NIFTY" if "NIFTY" in symbol else "SENSEX"
 
+<<<<<<< Updated upstream
     def _publish_analysis(
         self, symbol: str, timeframe_seconds: int, *, journal_eligible: bool = False
     ) -> None:
+=======
+    def _publish_analysis(self, symbol: str, timeframe_seconds: int) -> None:
+>>>>>>> Stashed changes
         underlying = "NIFTY" if "NIFTY" in symbol else "SENSEX"
         candles = self.history.for_symbol(symbol, timeframe_seconds)
         future_symbol = self._future_symbols.get(underlying)
@@ -301,12 +343,15 @@ class Application:
         self._analysis_by_underlying.setdefault(underlying, {})[timeframe_seconds] = snapshot
         for listener in tuple(self._analysis_listeners):
             listener(snapshot)
+<<<<<<< Updated upstream
         if journal_eligible and timeframe_seconds == 300:
             # Only a live, completed spot 5m candle can create a journal event
             # or open a forward-test position.  History/futures warm-up never
             # gets treated as a new trading decision.
             with self._journal_lock:
                 self._pending_journal_candle[underlying] = snapshot.calculated_at
+=======
+>>>>>>> Stashed changes
         # Re-assess whenever a timeframe closes.  The engine requires 1m and
         # 5m alignment before it can create a paper plan.
         self._evaluate_conviction(underlying)
@@ -323,6 +368,7 @@ class Application:
             listener(scalp)
         self._evaluate_conviction(snapshot.underlying)
 
+<<<<<<< Updated upstream
     def _on_stream_reset(self, reason: str) -> None:
         """Rebase derived option-flow data after a WebSocket interruption."""
         with self._option_lock:
@@ -336,6 +382,8 @@ class Application:
             self._pending_journal_candle.clear()
         self.publish_status(f"option-derived metrics rebasing after {reason}")
 
+=======
+>>>>>>> Stashed changes
     def _evaluate_conviction(self, underlying: str) -> None:
         analyses = self._analysis_by_underlying.get(underlying, {})
         # Five minutes is the stable core model.  The 1m snapshot remains an
@@ -346,6 +394,7 @@ class Application:
             return
         snapshot = self.conviction.evaluate(analysis, options, analyses)
         decision_id: int | None = None
+<<<<<<< Updated upstream
         # Save at most one research-grade decision only for a live completed
         # 5-minute *spot* candle.  This lock prevents concurrent warm-up,
         # futures, and option-stream workers from duplicating the same candle.
@@ -382,6 +431,22 @@ class Application:
             closed = self.paper_trades.force_exit_due(chains, datetime.now(timezone.utc))
             for underlying in closed:
                 self.publish_status(f"{underlying} paper position closed by scheduled EOD safeguard")
+=======
+        # Save one research-grade decision snapshot for each completed 5-minute
+        # candle.  Writing on every option tick would create duplicate records
+        # without adding useful evidence for later 10-day optimisation.
+        if self._last_journal_candle.get(underlying) != analysis.calculated_at:
+            hero = self.option_hero.evaluate(options)
+            scalp = self.scalp.evaluate(options, analyses)
+            decision_id = self.journal.capture_decision(snapshot, analyses, options, hero, scalp)
+            self._last_journal_candle[underlying] = analysis.calculated_at
+        self.paper_trades.evaluate(snapshot, options, decision_id)
+        for listener in tuple(self._conviction_listeners):
+            listener(snapshot)
+        if self.alerts.should_alert(snapshot):
+            self.alerts.play(snapshot.grade)
+            self.publish_status(f"{snapshot.underlying} {snapshot.grade} paper-trade setup alert")
+>>>>>>> Stashed changes
 
 
 def run_desktop() -> None:

@@ -25,6 +25,7 @@ def test_scalp_requires_short_timeframe_and_microstructure_alignment() -> None:
     assert scalp.score == 100
     assert scalp.plan is not None
     assert scalp.plan.option_symbol == call.symbol
+<<<<<<< Updated upstream
 
 
 def test_scalp_does_not_issue_a_direction_when_flow_conflicts_with_timing() -> None:
@@ -48,3 +49,5 @@ def test_scalp_does_not_issue_a_direction_when_flow_conflicts_with_timing() -> N
     assert scalp.side is Side.NEUTRAL
     assert scalp.plan is None
     assert any("conflicts with 10s/30s timing" in item for item in scalp.conflicts)
+=======
+>>>>>>> Stashed changes
