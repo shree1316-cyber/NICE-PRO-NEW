@@ -20,6 +20,7 @@ from nice_pro.engines.options import OptionChainEngine
 from nice_pro.engines.option_hero import OptionHeroEngine
 from nice_pro.engines.scalp import ScalpEngine
 from nice_pro.journal.store import ResearchJournal
+from nice_pro.ml.service import MLShadowService, MLShadowStatus
 from nice_pro.models.market import Candle, ConvictionSnapshot, IndicatorSnapshot, MarketSnapshot, OptionChainSnapshot, OptionHeroSnapshot, Quote, ScalpSnapshot
 from nice_pro.papertrade.policy import ForwardTestPolicy
 from nice_pro.papertrade.tracker import PaperTradeTracker
@@ -40,6 +41,9 @@ class Application:
         self.option_hero = OptionHeroEngine()
         self.scalp = ScalpEngine()
         self.conviction = ConvictionEngine()
+        # ML reads the existing 5-minute snapshot only. It is display-only and
+        # deliberately independent from the 308D paper-forward policy.
+        self.ml_shadow = MLShadowService()
         self.journal = ResearchJournal(settings.journal_database_path)
         self.forward_policy = ForwardTestPolicy(
             policy_id=settings.forward_test_policy_id,
@@ -71,6 +75,7 @@ class Application:
         self._option_hero_listeners: list[Callable[[OptionHeroSnapshot], None]] = []
         self._scalp_listeners: list[Callable[[ScalpSnapshot], None]] = []
         self._conviction_listeners: list[Callable[[ConvictionSnapshot], None]] = []
+        self._ml_shadow_by_underlying: dict[str, MLShadowStatus] = {}
         self._status_listeners: list[Callable[[str], None]] = []
 
     def add_snapshot_listener(self, listener: Callable[[MarketSnapshot], None]) -> None:
@@ -127,6 +132,10 @@ class Application:
     def forward_policy_status(self, underlying: str) -> dict[str, object]:
         """Return paper-forward controls for an honest dashboard explanation."""
         return self.paper_trades.policy_status(underlying)
+
+    def ml_shadow_status(self, underlying: str) -> MLShadowStatus | None:
+        """Latest ML display result; it cannot alter paper-plan eligibility."""
+        return self._ml_shadow_by_underlying.get(underlying)
 
     def feed_health(self) -> dict[str, object]:
         """Expose the current stream state without implying feed completeness."""
@@ -345,6 +354,9 @@ class Application:
         if analysis is None or options is None:
             return
         snapshot = self.conviction.evaluate(analysis, options, analyses)
+        self._ml_shadow_by_underlying[underlying] = self.ml_shadow.evaluate(
+            underlying, analysis, snapshot.side
+        )
         decision_id: int | None = None
         # Save at most one research-grade decision only for a live completed
         # 5-minute *spot* candle.  This lock prevents concurrent warm-up,

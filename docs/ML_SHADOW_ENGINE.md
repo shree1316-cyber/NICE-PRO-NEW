@@ -28,5 +28,25 @@ and early stopping), then calibrates its probability on a later chronological
 partition. Validation is rolling only: 120 sessions train, one-session embargo,
 then 20 sessions test. There is no random k-fold split.
 
-The next commit will add dashboard shadow score/status/top drivers plus weekly
-retraining and three-cycle feature-pruning reports.
+## Live dashboard and review
+
+The conviction cards show `ML SHADOW` beside the existing rule score. Before a
+model is trained it honestly shows `MODEL NOT TRAINED`; after training it shows
+a calibrated probability estimate, regime, and three global-importance context
+fields. It uses the existing cached 5-minute snapshot and makes no extra Kite
+API request.
+
+Feature pruning is a manual review: a feature is only flagged after low gain for
+three retraining cycles. It is never silently removed from a live model.
+
+## Train after the optional research packages are installed
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[ml]"
+.\.venv\Scripts\python.exe -m nice_pro.ml.runner --days 300 --underlying NIFTY
+```
+
+The command saves `data/ml_models/latest_shadow.joblib` and a validation report.
+Restart NICE-PRO after training to load it. A good-looking training score is not
+enough: compare the shadow model with the 308D policy through 10–20 paper-forward
+sessions before considering any policy change.
