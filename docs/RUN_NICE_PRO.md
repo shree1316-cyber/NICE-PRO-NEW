@@ -1,0 +1,127 @@
+# Run NICE-PRO on Windows
+
+## 1. Open the project folder in VS Code
+
+Open the terminal in the `NICE-PRO-NEW` folder. The commands below work in PowerShell.
+
+## 2. Create the local Python environment
+
+```powershell
+py -3.11 -m venv .venv
+```
+
+If `py -3.11` is unavailable, use your installed Python command instead:
+
+```powershell
+python -m venv .venv
+```
+
+## 3. Install NICE-PRO
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools
+.\.venv\Scripts\python.exe -m pip install -e . --no-build-isolation
+```
+
+The first command can take several minutes because PySide6 and Kite Connect are downloaded.
+
+## 4. Configure offline or live mode
+
+Copy `.env.example` to `.env` in the project root.
+
+- Leave the Kite fields blank to start the dashboard in offline mode.
+- For live data, enter `KITE_API_KEY`, `KITE_API_SECRET`, and the daily `KITE_ACCESS_TOKEN` obtained through Zerodha's supported login flow.
+- Keep `NICE_PAPER_TRADING_ONLY=true`.
+- Do not share or commit the `.env` file.
+
+Before a live session, confirm `NICE_SUBSCRIPTIONS` tokens against Kite's latest instrument master. Index and derivative tokens can change.
+
+## 5. Run the dashboard
+
+```powershell
+.\.venv\Scripts\python.exe -m nice_pro
+```
+
+Expected offline result: the NICE-PRO desktop window opens with cards for NIFTY, SENSEX, market structure, options, and conviction. It shows that Kite credentials are not configured.
+
+<<<<<<< Updated upstream
+Expected live result: after valid credentials and a live market are available, it connects to Kite, warms recent one-minute history, discovers the complete nearest-expiry NIFTY and SENSEX option chains (within Kite's subscription limit), and updates the cards. It never submits an order.
+=======
+Expected live result: after valid credentials and a live market are available, it connects to Kite, warms recent one-minute history, discovers a narrow ATM option universe, and updates the cards. It never submits an order.
+>>>>>>> Stashed changes
+
+## 6. Verify the code
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m ruff check src tests
+```
+
+## 7. Run the 308-session core optimisation
+
+This test reconstructs only the candle-based NICE-PRO core from Kite's
+one-minute historical candles. It does not claim to test the live-only Hero,
+option-chain, bid/ask-depth, CVD, or 10-second/30-second modules.
+
+```powershell
+.\.venv\Scripts\python.exe -m nice_pro.backtest.runner --from-date 2023-01-02 --to-date 2024-03-28 --underlying NIFTY --optimise
+```
+
+The resulting `*_optimisation.json` reports one **paper-forward-test candidate**
+only if it has positive average R and profit factor of at least 1.0 in both the
+70% training segment and untouched 30% test segment, with at least 50 trades in
+each. It does not change dashboard weights or place trades. Keep the candidate
+in paper mode for at least 10 trading sessions before considering any change.
+
+<<<<<<< Updated upstream
+## 8. Controlled 10-session forward-paper test
+
+The default `.env.example` enables `NIFTY_CORE_308D_V1`. It is still strictly
+paper-only and is eligible for **NIFTY only**, because the selected 308-session
+candidate was validated on NIFTY. SENSEX continues to be journaled but will not
+open a controlled forward-paper position until it has its own validated
+candidate. The policy requires a fresh completed 5-minute decision, MTF score
+of 65 or higher, grade A/A+, a 15-minute cooldown after a close, and no more
+than three entries per IST day. It stops opening new entries after 14:45 IST
+and force-closes a still-active paper position at 15:20 IST when a fresh option
+quote is available.
+
+The **Journal** table displays IST. Its SQLite timestamps remain stored in UTC
+so research exports can be compared consistently. The **Reports** page filters
+to the forward-policy source, ignores older legacy paper records, and shows the
+number of observed sessions out of ten. A Target 1 win is credited at Target 1
+even if the next received tick is higher; a stop is recorded at the observed
+worse price if it gaps through the planned stop.
+
+To pause new forward-test entries without changing any code, set this in your
+local `.env` and restart NICE-PRO:
+
+```ini
+NICE_FORWARD_TEST_ENABLED=false
+```
+
+## Hero score interpretation
+
+The Options page has a separate, paper-only **Full-chain Hero Conviction** box.
+It uses live nearest-expiry option-chain evidence rather than the candle-only
+core backtest. Its directional-evidence score is normalized from 0 to 100:
+
+- **A+:** 80--100, with no more than one unresolved chain conflict.
+- **A:** 65--79, with no more than two unresolved chain conflicts.
+- **B:** 45--64.
+- **C:** 25--44.
+- **Avoid:** below 25 or conflicting bullish/bearish chain evidence.
+
+This is an explainable score of the live data currently observed; it is not a
+profit probability, a prediction, or a guarantee. Any displayed Hero plan is
+paper-only and is never submitted to Zerodha.
+
+=======
+>>>>>>> Stashed changes
+## Troubleshooting
+
+- **`No module named kiteconnect` or `loguru`:** repeat the install command from step 3.
+- **Dashboard opens but has no live price:** verify the access token, trading session, subscription tokens, and Kite API entitlement.
+- **Window says “Not responding” at launch:** install the current update. NICE-PRO now starts the Kite connection in a background worker, so the desktop window remains responsive even if Kite or the network is slow. If data still does not arrive after one minute, close the app and inspect `logs/nice-pro.log`; send the final 30 lines together with the terminal output.
+- **No option-chain data:** wait for a spot quote, then check the instrument master and current expiry availability.
+- **A plan appears:** it is paper-only. NICE-PRO has no order-placement code.

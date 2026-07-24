@@ -1,0 +1,1476 @@
+{
+  "selection_rule": "Recommended candidates need at least 50 trades in each split, positive average R and profit factor >= 1.0 in both splits. Ranking uses the weaker split's average R, then the weaker profit factor; win rate is diagnostic only.",
+  "status": "candidate_for_paper_forward_test_only",
+  "recommended_candidate": {
+    "config": {
+      "minimum_mtf_score": 65,
+      "minimum_grade": "A",
+      "stop_atr_multiple": 1.2,
+      "target_one_r": 1.25,
+      "cooldown_minutes": 15,
+      "max_trades_per_day": 3
+    },
+    "in_sample_70_percent": {
+      "trades": 555,
+      "wins": 253,
+      "losses": 260,
+      "win_rate": 45.59,
+      "average_r": 0.106,
+      "profit_factor": 1.219,
+      "max_drawdown_r": 20.285
+    },
+    "out_of_sample_30_percent": {
+      "trades": 236,
+      "wins": 107,
+      "losses": 112,
+      "win_rate": 45.34,
+      "average_r": 0.122,
+      "profit_factor": 1.254,
+      "max_drawdown_r": 10.511
+    },
+    "robust_for_forward_test": true,
+    "robust_score": 12.99
+  },
+  "candidates_ranked": [
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.25,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 555,
+        "wins": 253,
+        "losses": 260,
+        "win_rate": 45.59,
+        "average_r": 0.106,
+        "profit_factor": 1.219,
+        "max_drawdown_r": 20.285
+      },
+      "out_of_sample_30_percent": {
+        "trades": 236,
+        "wins": 107,
+        "losses": 112,
+        "win_rate": 45.34,
+        "average_r": 0.122,
+        "profit_factor": 1.254,
+        "max_drawdown_r": 10.511
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 12.99
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.5,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 829,
+        "wins": 330,
+        "losses": 424,
+        "win_rate": 39.81,
+        "average_r": 0.107,
+        "profit_factor": 1.203,
+        "max_drawdown_r": 14.442
+      },
+      "out_of_sample_30_percent": {
+        "trades": 355,
+        "wins": 137,
+        "losses": 179,
+        "win_rate": 38.59,
+        "average_r": 0.129,
+        "profit_factor": 1.25,
+        "max_drawdown_r": 13.049
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 12.93
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.5,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 563,
+        "wins": 234,
+        "losses": 303,
+        "win_rate": 41.56,
+        "average_r": 0.099,
+        "profit_factor": 1.181,
+        "max_drawdown_r": 18.987
+      },
+      "out_of_sample_30_percent": {
+        "trades": 238,
+        "wins": 99,
+        "losses": 127,
+        "win_rate": 41.6,
+        "average_r": 0.123,
+        "profit_factor": 1.231,
+        "max_drawdown_r": 14.077
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 11.91
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.25,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 932,
+        "wins": 425,
+        "losses": 456,
+        "win_rate": 45.6,
+        "average_r": 0.086,
+        "profit_factor": 1.174,
+        "max_drawdown_r": 13.679
+      },
+      "out_of_sample_30_percent": {
+        "trades": 396,
+        "wins": 186,
+        "losses": 189,
+        "win_rate": 46.97,
+        "average_r": 0.129,
+        "profit_factor": 1.266,
+        "max_drawdown_r": 11.121
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 10.54
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.5,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 753,
+        "wins": 311,
+        "losses": 413,
+        "win_rate": 41.3,
+        "average_r": 0.083,
+        "profit_factor": 1.15,
+        "max_drawdown_r": 21.028
+      },
+      "out_of_sample_30_percent": {
+        "trades": 314,
+        "wins": 141,
+        "losses": 161,
+        "win_rate": 44.9,
+        "average_r": 0.186,
+        "profit_factor": 1.362,
+        "max_drawdown_r": 13.584
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 10.0
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.0,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 1079,
+        "wins": 563,
+        "losses": 478,
+        "win_rate": 52.18,
+        "average_r": 0.079,
+        "profit_factor": 1.176,
+        "max_drawdown_r": 15.44
+      },
+      "out_of_sample_30_percent": {
+        "trades": 454,
+        "wins": 240,
+        "losses": 202,
+        "win_rate": 52.86,
+        "average_r": 0.087,
+        "profit_factor": 1.195,
+        "max_drawdown_r": 13.778
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 9.86
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.5,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 684,
+        "wins": 263,
+        "losses": 357,
+        "win_rate": 38.45,
+        "average_r": 0.077,
+        "profit_factor": 1.143,
+        "max_drawdown_r": 14.05
+      },
+      "out_of_sample_30_percent": {
+        "trades": 285,
+        "wins": 111,
+        "losses": 141,
+        "win_rate": 38.95,
+        "average_r": 0.144,
+        "profit_factor": 1.285,
+        "max_drawdown_r": 12.251
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 9.33
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.25,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 720,
+        "wins": 323,
+        "losses": 353,
+        "win_rate": 44.86,
+        "average_r": 0.074,
+        "profit_factor": 1.147,
+        "max_drawdown_r": 15.713
+      },
+      "out_of_sample_30_percent": {
+        "trades": 303,
+        "wins": 144,
+        "losses": 142,
+        "win_rate": 47.52,
+        "average_r": 0.148,
+        "profit_factor": 1.315,
+        "max_drawdown_r": 11.026
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 9.07
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.5,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 997,
+        "wins": 410,
+        "losses": 551,
+        "win_rate": 41.12,
+        "average_r": 0.074,
+        "profit_factor": 1.133,
+        "max_drawdown_r": 20.681
+      },
+      "out_of_sample_30_percent": {
+        "trades": 427,
+        "wins": 183,
+        "losses": 230,
+        "win_rate": 42.86,
+        "average_r": 0.127,
+        "profit_factor": 1.236,
+        "max_drawdown_r": 11.0
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 8.93
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.0,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 769,
+        "wins": 398,
+        "losses": 340,
+        "win_rate": 51.76,
+        "average_r": 0.07,
+        "profit_factor": 1.156,
+        "max_drawdown_r": 19.023
+      },
+      "out_of_sample_30_percent": {
+        "trades": 326,
+        "wins": 173,
+        "losses": 146,
+        "win_rate": 53.07,
+        "average_r": 0.087,
+        "profit_factor": 1.193,
+        "max_drawdown_r": 12.877
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 8.76
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.5,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 545,
+        "wins": 203,
+        "losses": 281,
+        "win_rate": 37.25,
+        "average_r": 0.068,
+        "profit_factor": 1.129,
+        "max_drawdown_r": 24.115
+      },
+      "out_of_sample_30_percent": {
+        "trades": 232,
+        "wins": 87,
+        "losses": 114,
+        "win_rate": 37.5,
+        "average_r": 0.136,
+        "profit_factor": 1.27,
+        "max_drawdown_r": 9.195
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 8.29
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.0,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 562,
+        "wins": 289,
+        "losses": 243,
+        "win_rate": 51.42,
+        "average_r": 0.075,
+        "profit_factor": 1.169,
+        "max_drawdown_r": 20.005
+      },
+      "out_of_sample_30_percent": {
+        "trades": 240,
+        "wins": 124,
+        "losses": 110,
+        "win_rate": 51.67,
+        "average_r": 0.064,
+        "profit_factor": 1.138,
+        "max_drawdown_r": 8.0
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 7.98
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.5,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 584,
+        "wins": 231,
+        "losses": 318,
+        "win_rate": 39.55,
+        "average_r": 0.065,
+        "profit_factor": 1.118,
+        "max_drawdown_r": 26.681
+      },
+      "out_of_sample_30_percent": {
+        "trades": 251,
+        "wins": 100,
+        "losses": 137,
+        "win_rate": 39.84,
+        "average_r": 0.091,
+        "profit_factor": 1.166,
+        "max_drawdown_r": 13.785
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 7.88
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.25,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 568,
+        "wins": 259,
+        "losses": 291,
+        "win_rate": 45.6,
+        "average_r": 0.059,
+        "profit_factor": 1.114,
+        "max_drawdown_r": 18.579
+      },
+      "out_of_sample_30_percent": {
+        "trades": 242,
+        "wins": 114,
+        "losses": 123,
+        "win_rate": 47.11,
+        "average_r": 0.094,
+        "profit_factor": 1.184,
+        "max_drawdown_r": 10.658
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 7.24
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.25,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 590,
+        "wins": 265,
+        "losses": 301,
+        "win_rate": 44.92,
+        "average_r": 0.056,
+        "profit_factor": 1.108,
+        "max_drawdown_r": 25.079
+      },
+      "out_of_sample_30_percent": {
+        "trades": 255,
+        "wins": 116,
+        "losses": 132,
+        "win_rate": 45.49,
+        "average_r": 0.064,
+        "profit_factor": 1.124,
+        "max_drawdown_r": 13.734
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 6.88
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.25,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 578,
+        "wins": 258,
+        "losses": 272,
+        "win_rate": 44.64,
+        "average_r": 0.096,
+        "profit_factor": 1.198,
+        "max_drawdown_r": 20.679
+      },
+      "out_of_sample_30_percent": {
+        "trades": 249,
+        "wins": 104,
+        "losses": 126,
+        "win_rate": 41.77,
+        "average_r": 0.049,
+        "profit_factor": 1.095,
+        "max_drawdown_r": 14.498
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 6.05
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.25,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 795,
+        "wins": 361,
+        "losses": 415,
+        "win_rate": 45.41,
+        "average_r": 0.047,
+        "profit_factor": 1.09,
+        "max_drawdown_r": 22.079
+      },
+      "out_of_sample_30_percent": {
+        "trades": 335,
+        "wins": 164,
+        "losses": 166,
+        "win_rate": 48.96,
+        "average_r": 0.126,
+        "profit_factor": 1.254,
+        "max_drawdown_r": 10.5
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 5.8
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.0,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 575,
+        "wins": 291,
+        "losses": 268,
+        "win_rate": 50.61,
+        "average_r": 0.042,
+        "profit_factor": 1.089,
+        "max_drawdown_r": 20.69
+      },
+      "out_of_sample_30_percent": {
+        "trades": 244,
+        "wins": 127,
+        "losses": 115,
+        "win_rate": 52.05,
+        "average_r": 0.055,
+        "profit_factor": 1.116,
+        "max_drawdown_r": 10.681
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 5.29
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.25,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 1126,
+        "wins": 508,
+        "losses": 593,
+        "win_rate": 45.12,
+        "average_r": 0.04,
+        "profit_factor": 1.076,
+        "max_drawdown_r": 27.316
+      },
+      "out_of_sample_30_percent": {
+        "trades": 478,
+        "wins": 224,
+        "losses": 247,
+        "win_rate": 46.86,
+        "average_r": 0.076,
+        "profit_factor": 1.147,
+        "max_drawdown_r": 13.0
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 4.96
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.0,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 585,
+        "wins": 303,
+        "losses": 248,
+        "win_rate": 51.79,
+        "average_r": 0.093,
+        "profit_factor": 1.213,
+        "max_drawdown_r": 13.624
+      },
+      "out_of_sample_30_percent": {
+        "trades": 253,
+        "wins": 125,
+        "losses": 117,
+        "win_rate": 49.41,
+        "average_r": 0.038,
+        "profit_factor": 1.08,
+        "max_drawdown_r": 17.655
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 4.8
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.0,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 1286,
+        "wins": 657,
+        "losses": 612,
+        "win_rate": 51.09,
+        "average_r": 0.035,
+        "profit_factor": 1.072,
+        "max_drawdown_r": 24.626
+      },
+      "out_of_sample_30_percent": {
+        "trades": 534,
+        "wins": 280,
+        "losses": 250,
+        "win_rate": 52.43,
+        "average_r": 0.059,
+        "profit_factor": 1.125,
+        "max_drawdown_r": 13.97
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 4.42
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.5,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 568,
+        "wins": 218,
+        "losses": 283,
+        "win_rate": 38.38,
+        "average_r": 0.104,
+        "profit_factor": 1.202,
+        "max_drawdown_r": 20.479
+      },
+      "out_of_sample_30_percent": {
+        "trades": 247,
+        "wins": 82,
+        "losses": 131,
+        "win_rate": 33.2,
+        "average_r": 0.034,
+        "profit_factor": 1.064,
+        "max_drawdown_r": 12.95
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 4.24
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.5,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 581,
+        "wins": 244,
+        "losses": 294,
+        "win_rate": 42.0,
+        "average_r": 0.139,
+        "profit_factor": 1.268,
+        "max_drawdown_r": 11.5
+      },
+      "out_of_sample_30_percent": {
+        "trades": 239,
+        "wins": 87,
+        "losses": 131,
+        "win_rate": 36.4,
+        "average_r": 0.034,
+        "profit_factor": 1.061,
+        "max_drawdown_r": 26.221
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 4.21
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.5,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 520,
+        "wins": 223,
+        "losses": 281,
+        "win_rate": 42.88,
+        "average_r": 0.109,
+        "profit_factor": 1.2,
+        "max_drawdown_r": 20.0
+      },
+      "out_of_sample_30_percent": {
+        "trades": 215,
+        "wins": 82,
+        "losses": 125,
+        "win_rate": 38.14,
+        "average_r": 0.022,
+        "profit_factor": 1.037,
+        "max_drawdown_r": 21.785
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 2.77
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.5,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 704,
+        "wins": 306,
+        "losses": 382,
+        "win_rate": 43.47,
+        "average_r": 0.114,
+        "profit_factor": 1.209,
+        "max_drawdown_r": 17.0
+      },
+      "out_of_sample_30_percent": {
+        "trades": 280,
+        "wins": 108,
+        "losses": 163,
+        "win_rate": 38.57,
+        "average_r": 0.021,
+        "profit_factor": 1.036,
+        "max_drawdown_r": 26.285
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 2.66
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.0,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 594,
+        "wins": 309,
+        "losses": 268,
+        "win_rate": 52.02,
+        "average_r": 0.068,
+        "profit_factor": 1.149,
+        "max_drawdown_r": 17.544
+      },
+      "out_of_sample_30_percent": {
+        "trades": 257,
+        "wins": 128,
+        "losses": 125,
+        "win_rate": 49.81,
+        "average_r": 0.017,
+        "profit_factor": 1.034,
+        "max_drawdown_r": 14.0
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 2.24
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.5,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 472,
+        "wins": 196,
+        "losses": 240,
+        "win_rate": 41.53,
+        "average_r": 0.129,
+        "profit_factor": 1.248,
+        "max_drawdown_r": 11.884
+      },
+      "out_of_sample_30_percent": {
+        "trades": 196,
+        "wins": 69,
+        "losses": 108,
+        "win_rate": 35.2,
+        "average_r": 0.016,
+        "profit_factor": 1.028,
+        "max_drawdown_r": 24.012
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 2.076
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 65,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.0,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 848,
+        "wins": 419,
+        "losses": 413,
+        "win_rate": 49.41,
+        "average_r": 0.008,
+        "profit_factor": 1.017,
+        "max_drawdown_r": 30.455
+      },
+      "out_of_sample_30_percent": {
+        "trades": 355,
+        "wins": 193,
+        "losses": 160,
+        "win_rate": 54.37,
+        "average_r": 0.097,
+        "profit_factor": 1.214,
+        "max_drawdown_r": 13.0
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 1.17
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.0,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 589,
+        "wins": 302,
+        "losses": 283,
+        "win_rate": 51.27,
+        "average_r": 0.035,
+        "profit_factor": 1.073,
+        "max_drawdown_r": 22.0
+      },
+      "out_of_sample_30_percent": {
+        "trades": 239,
+        "wins": 119,
+        "losses": 118,
+        "win_rate": 49.79,
+        "average_r": 0.007,
+        "profit_factor": 1.015,
+        "max_drawdown_r": 22.0
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 1.05
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.0,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 904,
+        "wins": 477,
+        "losses": 423,
+        "win_rate": 52.77,
+        "average_r": 0.062,
+        "profit_factor": 1.132,
+        "max_drawdown_r": 18.0
+      },
+      "out_of_sample_30_percent": {
+        "trades": 348,
+        "wins": 172,
+        "losses": 172,
+        "win_rate": 49.43,
+        "average_r": 0.005,
+        "profit_factor": 1.01,
+        "max_drawdown_r": 25.734
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 0.8
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.25,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 660,
+        "wins": 316,
+        "losses": 318,
+        "win_rate": 47.88,
+        "average_r": 0.118,
+        "profit_factor": 1.242,
+        "max_drawdown_r": 12.75
+      },
+      "out_of_sample_30_percent": {
+        "trades": 263,
+        "wins": 109,
+        "losses": 140,
+        "win_rate": 41.44,
+        "average_r": 0.001,
+        "profit_factor": 1.001,
+        "max_drawdown_r": 25.487
+      },
+      "robust_for_forward_test": true,
+      "robust_score": 0.31
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.25,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 496,
+        "wins": 234,
+        "losses": 238,
+        "win_rate": 47.18,
+        "average_r": 0.111,
+        "profit_factor": 1.226,
+        "max_drawdown_r": 12.75
+      },
+      "out_of_sample_30_percent": {
+        "trades": 208,
+        "wins": 85,
+        "losses": 111,
+        "win_rate": 40.87,
+        "average_r": -0.002,
+        "profit_factor": 0.996,
+        "max_drawdown_r": 20.237
+      },
+      "robust_for_forward_test": false,
+      "robust_score": -0.04
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.25,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 552,
+        "wins": 260,
+        "losses": 284,
+        "win_rate": 47.1,
+        "average_r": 0.075,
+        "profit_factor": 1.145,
+        "max_drawdown_r": 20.0
+      },
+      "out_of_sample_30_percent": {
+        "trades": 225,
+        "wins": 96,
+        "losses": 124,
+        "win_rate": 42.67,
+        "average_r": -0.003,
+        "profit_factor": 0.994,
+        "max_drawdown_r": 21.5
+      },
+      "robust_for_forward_test": false,
+      "robust_score": -0.16
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.25,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 798,
+        "wins": 372,
+        "losses": 416,
+        "win_rate": 46.62,
+        "average_r": 0.064,
+        "profit_factor": 1.122,
+        "max_drawdown_r": 24.0
+      },
+      "out_of_sample_30_percent": {
+        "trades": 310,
+        "wins": 132,
+        "losses": 171,
+        "win_rate": 42.58,
+        "average_r": -0.007,
+        "profit_factor": 0.987,
+        "max_drawdown_r": 25.532
+      },
+      "robust_for_forward_test": false,
+      "robust_score": -0.63
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.5,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 399,
+        "wins": 162,
+        "losses": 202,
+        "win_rate": 40.6,
+        "average_r": 0.12,
+        "profit_factor": 1.231,
+        "max_drawdown_r": 9.695
+      },
+      "out_of_sample_30_percent": {
+        "trades": 168,
+        "wins": 56,
+        "losses": 94,
+        "win_rate": 33.33,
+        "average_r": -0.014,
+        "profit_factor": 0.975,
+        "max_drawdown_r": 21.931
+      },
+      "robust_for_forward_test": false,
+      "robust_score": -1.482
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.0,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 759,
+        "wins": 408,
+        "losses": 330,
+        "win_rate": 53.75,
+        "average_r": 0.103,
+        "profit_factor": 1.233,
+        "max_drawdown_r": 15.0
+      },
+      "out_of_sample_30_percent": {
+        "trades": 300,
+        "wins": 141,
+        "losses": 150,
+        "win_rate": 47.0,
+        "average_r": -0.021,
+        "profit_factor": 0.958,
+        "max_drawdown_r": 24.778
+      },
+      "robust_for_forward_test": false,
+      "robust_score": -2.32
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.5,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 429,
+        "wins": 180,
+        "losses": 212,
+        "win_rate": 41.96,
+        "average_r": 0.15,
+        "profit_factor": 1.295,
+        "max_drawdown_r": 14.512
+      },
+      "out_of_sample_30_percent": {
+        "trades": 178,
+        "wins": 58,
+        "losses": 100,
+        "win_rate": 32.58,
+        "average_r": -0.028,
+        "profit_factor": 0.951,
+        "max_drawdown_r": 23.652
+      },
+      "robust_for_forward_test": false,
+      "robust_score": -3.112
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.0,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 99
+      },
+      "in_sample_70_percent": {
+        "trades": 536,
+        "wins": 289,
+        "losses": 231,
+        "win_rate": 53.92,
+        "average_r": 0.104,
+        "profit_factor": 1.236,
+        "max_drawdown_r": 11.0
+      },
+      "out_of_sample_30_percent": {
+        "trades": 221,
+        "wins": 101,
+        "losses": 112,
+        "win_rate": 45.7,
+        "average_r": -0.04,
+        "profit_factor": 0.921,
+        "max_drawdown_r": 23.0
+      },
+      "robust_for_forward_test": false,
+      "robust_score": -4.59
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.5,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 420,
+        "wins": 177,
+        "losses": 228,
+        "win_rate": 42.14,
+        "average_r": 0.096,
+        "profit_factor": 1.175,
+        "max_drawdown_r": 21.727
+      },
+      "out_of_sample_30_percent": {
+        "trades": 174,
+        "wins": 60,
+        "losses": 106,
+        "win_rate": 34.48,
+        "average_r": -0.054,
+        "profit_factor": 0.912,
+        "max_drawdown_r": 22.704
+      },
+      "robust_for_forward_test": false,
+      "robust_score": -6.106
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.25,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 410,
+        "wins": 194,
+        "losses": 193,
+        "win_rate": 47.32,
+        "average_r": 0.123,
+        "profit_factor": 1.253,
+        "max_drawdown_r": 10.75
+      },
+      "out_of_sample_30_percent": {
+        "trades": 170,
+        "wins": 64,
+        "losses": 94,
+        "win_rate": 37.65,
+        "average_r": -0.057,
+        "profit_factor": 0.898,
+        "max_drawdown_r": 21.581
+      },
+      "robust_for_forward_test": false,
+      "robust_score": -6.55
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.0,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 472,
+        "wins": 249,
+        "losses": 219,
+        "win_rate": 52.75,
+        "average_r": 0.067,
+        "profit_factor": 1.145,
+        "max_drawdown_r": 12.0
+      },
+      "out_of_sample_30_percent": {
+        "trades": 194,
+        "wins": 88,
+        "losses": 102,
+        "win_rate": 45.36,
+        "average_r": -0.063,
+        "profit_factor": 0.879,
+        "max_drawdown_r": 23.734
+      },
+      "robust_for_forward_test": false,
+      "robust_score": -7.316
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.0,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 438,
+        "wins": 229,
+        "losses": 205,
+        "win_rate": 52.28,
+        "average_r": 0.059,
+        "profit_factor": 1.125,
+        "max_drawdown_r": 17.0
+      },
+      "out_of_sample_30_percent": {
+        "trades": 180,
+        "wins": 82,
+        "losses": 96,
+        "win_rate": 45.56,
+        "average_r": -0.074,
+        "profit_factor": 0.862,
+        "max_drawdown_r": 19.0
+      },
+      "robust_for_forward_test": false,
+      "robust_score": -8.6
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.25,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 428,
+        "wins": 203,
+        "losses": 218,
+        "win_rate": 47.43,
+        "average_r": 0.084,
+        "profit_factor": 1.163,
+        "max_drawdown_r": 18.25
+      },
+      "out_of_sample_30_percent": {
+        "trades": 175,
+        "wins": 68,
+        "losses": 102,
+        "win_rate": 38.86,
+        "average_r": -0.078,
+        "profit_factor": 0.865,
+        "max_drawdown_r": 20.305
+      },
+      "robust_for_forward_test": false,
+      "robust_score": -8.975
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.25,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 442,
+        "wins": 214,
+        "losses": 204,
+        "win_rate": 48.42,
+        "average_r": 0.147,
+        "profit_factor": 1.312,
+        "max_drawdown_r": 10.75
+      },
+      "out_of_sample_30_percent": {
+        "trades": 181,
+        "wins": 66,
+        "losses": 101,
+        "win_rate": 36.46,
+        "average_r": -0.081,
+        "profit_factor": 0.858,
+        "max_drawdown_r": 23.169
+      },
+      "robust_for_forward_test": false,
+      "robust_score": -9.339
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.5,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 448,
+        "wins": 197,
+        "losses": 235,
+        "win_rate": 43.97,
+        "average_r": 0.143,
+        "profit_factor": 1.269,
+        "max_drawdown_r": 17.227
+      },
+      "out_of_sample_30_percent": {
+        "trades": 187,
+        "wins": 62,
+        "losses": 116,
+        "win_rate": 33.16,
+        "average_r": -0.086,
+        "profit_factor": 0.861,
+        "max_drawdown_r": 25.002
+      },
+      "robust_for_forward_test": false,
+      "robust_score": -9.803
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.0,
+        "cooldown_minutes": 15,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 423,
+        "wins": 228,
+        "losses": 180,
+        "win_rate": 53.9,
+        "average_r": 0.108,
+        "profit_factor": 1.249,
+        "max_drawdown_r": 10.0
+      },
+      "out_of_sample_30_percent": {
+        "trades": 172,
+        "wins": 72,
+        "losses": 92,
+        "win_rate": 41.86,
+        "average_r": -0.104,
+        "profit_factor": 0.807,
+        "max_drawdown_r": 21.594
+      },
+      "robust_for_forward_test": false,
+      "robust_score": -12.158
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.0,
+        "target_one_r": 1.25,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 459,
+        "wins": 215,
+        "losses": 234,
+        "win_rate": 46.84,
+        "average_r": 0.08,
+        "profit_factor": 1.156,
+        "max_drawdown_r": 15.5
+      },
+      "out_of_sample_30_percent": {
+        "trades": 191,
+        "wins": 71,
+        "losses": 113,
+        "win_rate": 37.17,
+        "average_r": -0.107,
+        "profit_factor": 0.819,
+        "max_drawdown_r": 24.337
+      },
+      "robust_for_forward_test": false,
+      "robust_score": -12.319
+    },
+    {
+      "config": {
+        "minimum_mtf_score": 75,
+        "minimum_grade": "A",
+        "stop_atr_multiple": 1.2,
+        "target_one_r": 1.0,
+        "cooldown_minutes": 0,
+        "max_trades_per_day": 3
+      },
+      "in_sample_70_percent": {
+        "trades": 454,
+        "wins": 245,
+        "losses": 193,
+        "win_rate": 53.96,
+        "average_r": 0.113,
+        "profit_factor": 1.259,
+        "max_drawdown_r": 12.0
+      },
+      "out_of_sample_30_percent": {
+        "trades": 188,
+        "wins": 75,
+        "losses": 104,
+        "win_rate": 39.89,
+        "average_r": -0.14,
+        "profit_factor": 0.748,
+        "max_drawdown_r": 27.896
+      },
+      "robust_for_forward_test": false,
+      "robust_score": -16.332
+    }
+  ]
+}

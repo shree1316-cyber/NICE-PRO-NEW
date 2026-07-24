@@ -1,7 +1,2 @@
-# Application runtime
--e .
-
-# Development and tests
-pytest>=8.0
-pytest-asyncio>=0.23
-ruff>=0.5
+# NICE-PRO dependencies are declared in pyproject.toml.
+# Install with: python -m pip install -e . --no-build-isolation
