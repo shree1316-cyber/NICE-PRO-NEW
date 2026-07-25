@@ -1,0 +1,23 @@
+{
+  "mode": "shadow_only",
+  "underlying": "SENSEX",
+  "from": "2023-01-02T09:15:00+05:30",
+  "to": "2026-07-23T15:30:00+05:30",
+  "candles": 328856,
+  "samples": 19557,
+  "walk_forward": {
+    "folds": 38,
+    "mean_roc_auc": 0.5141387908803869,
+    "mean_precision": null,
+    "mean_expectancy_r": -0.10767037902998179,
+    "mean_profit_factor": 0.8436482735633065
+  },
+  "calibration": {
+    "roc_auc": 0.5533646272966155,
+    "average_precision": 0.39047449280525653,
+    "brier_score": 0.22831116519478659
+  },
+  "model": "data\\ml_models\\latest_shadow_sensex.joblib",
+  "metadata": "data\\ml_models\\latest_shadow_sensex.json",
+  "notice": "ML score is display-only. It does not change the 308D policy or submit orders."
+}

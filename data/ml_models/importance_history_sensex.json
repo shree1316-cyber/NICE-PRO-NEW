@@ -1,0 +1,23 @@
+[
+  {
+    "atr_percent": 73,
+    "ema_spread_atr": 75,
+    "opening_range_position": 56,
+    "regime_range": 0,
+    "regime_trend_down": 0,
+    "regime_trend_up": 0,
+    "regime_volatile": 0,
+    "relative_volume": 0,
+    "return_15bar": 77,
+    "return_1bar": 53,
+    "rsi_normalized": 74,
+    "session_cos": 135,
+    "session_fraction": 65,
+    "session_sin": 29,
+    "side_buy": 0,
+    "side_sell": 0,
+    "trend_strength_atr": 83,
+    "volume_available": 0,
+    "vwap_distance_atr": 50
+  }
+]
