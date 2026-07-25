@@ -3,6 +3,23 @@
 This is a paper-only research layer. It does not submit broker orders and does
 not replace the `NIFTY_CORE_308D_V1` paper-forward policy.
 
+## Independence contract
+
+NICE-PRO shares one cached Kite snapshot to avoid duplicate API calls, but the
+three engines never use one another's score, direction, or eligibility:
+
+- **308D V1**: fixed rule/MTF policy and paper-forward gates only.
+- **Core ML**: candle-only trend, momentum, volatility, volume proxy, levels,
+  session and regime values; its candidate direction is derived from those
+  values only.
+- **Live-Enriched ML**: a future, separate model that will use journaled
+  option-chain/depth/microstructure values only after enough labelled live
+  observations exist. It will not consume either existing engine's score.
+
+Core ML v2 requires a fresh train. Older Core ML files were trained using a
+rule-derived direction and are deliberately displayed as `CORE ML RE-TRAIN
+REQUIRED` rather than being treated as independent.
+
 ## Initial historical inputs
 
 The first training dataset uses only values reproducible from completed Kite

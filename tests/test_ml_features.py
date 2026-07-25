@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from nice_pro.ml.features import build_feature_row
+from nice_pro.ml.features import build_feature_row, derive_core_ml_side
 from nice_pro.models.market import IndicatorSnapshot, MarketRegime, Side
 
 
@@ -16,3 +16,14 @@ def test_features_are_continuous_and_as_of_snapshot() -> None:
     assert row.values["ema_spread_atr"] == 1
     assert row.values["regime_trend_up"] == 1
     assert row.values["side_buy"] == 1
+
+
+def test_core_ml_direction_is_candle_only() -> None:
+    snapshot = IndicatorSnapshot(
+        symbol="NSE:NIFTY 50", regime=MarketRegime.TREND_DOWN,
+        calculated_at=datetime(2026, 1, 5, 5, 0, tzinfo=timezone.utc), timeframe_seconds=300,
+        close=98, vwap=100, ema_fast=99, ema_slow=101, rsi=38,
+    )
+    assert derive_core_ml_side(snapshot) is Side.SELL
+    # No rule-engine or option-chain parameter is accepted by this function.
+    assert build_feature_row(snapshot).side is Side.SELL

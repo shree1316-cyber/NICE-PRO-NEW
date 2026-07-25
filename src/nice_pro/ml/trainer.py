@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 
 from nice_pro.ml.contracts import LabeledSample
+from nice_pro.ml.features import CORE_ML_CONTRACT
 from nice_pro.ml.runtime import require_ml
 
 
@@ -105,11 +106,13 @@ class ModelTrainer:
 def artifact_metadata(artifact: ModelArtifact) -> dict[str, object]:
     """Metadata stored beside the model, deliberately excluding fitted objects."""
     return {
-        "schema_version": 1,
+        "schema_version": 2,
+        "model_contract": CORE_ML_CONTRACT,
         "trained_at": artifact.trained_at.isoformat(), "trained_until": artifact.trained_until.isoformat(),
         "feature_names": list(artifact.feature_names), "feature_importance": artifact.feature_importance,
         "config": asdict(artifact.config), "calibration_metrics": asdict(artifact.calibration_metrics),
         "mode": "shadow_only",
+        "independence": "Core ML uses candle-derived features and its own candidate direction only; it does not consume the 308D policy, option-chain, Hero, scalp, or another ML score.",
     }
 
 

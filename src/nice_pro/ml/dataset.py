@@ -4,13 +4,12 @@ from __future__ import annotations
 
 from bisect import bisect_right
 
-from nice_pro.engines.conviction import ConvictionEngine
 from nice_pro.engines.history import _resample
 from nice_pro.engines.indicators import IndicatorEngine
 from nice_pro.ml.contracts import LabeledSample
-from nice_pro.ml.features import build_feature_row
+from nice_pro.ml.features import build_feature_row, derive_core_ml_side
 from nice_pro.ml.labels import triple_barrier_label
-from nice_pro.models.market import Candle, OptionChainSnapshot, Side
+from nice_pro.models.market import Candle, Side
 
 _TIMEFRAMES = (60, 300, 900, 1800, 3600)
 
@@ -22,7 +21,6 @@ class HistoricalDatasetBuilder:
         self._horizon_bars = horizon_bars
         self._target_r = target_r
         self._indicators = IndicatorEngine()
-        self._conviction = ConvictionEngine()
 
     def build(
         self,
@@ -46,19 +44,20 @@ class HistoricalDatasetBuilder:
             core = analyses[300]
             if core.atr is None or core.atr <= 0:
                 continue
-            chain = OptionChainSnapshot(decision_bar.symbol, decision_bar.closed_at, core.close, None, None)
-            decision = self._conviction.evaluate(core, chain, analyses)
-            if decision.side is Side.NEUTRAL:
+            # Core ML owns its historical candidate direction.  It never uses
+            # the 308D rule engine, MTF gate, Hero, scalp, or option chain.
+            side = derive_core_ml_side(core)
+            if side is Side.NEUTRAL:
                 continue
             label = triple_barrier_label(
-                candles, decision_index=index, side=decision.side, atr=core.atr,
+                candles, decision_index=index, side=side, atr=core.atr,
                 horizon_bars=self._horizon_bars, target_r=self._target_r,
             )
             if label is None:
                 continue
             prior = candles[index - 1].close if index else None
             prior_15 = candles[index - 15].close if index >= 15 else None
-            output.append(LabeledSample(build_feature_row(core, decision.side, prior_close=prior, fifteen_bar_close=prior_15), label))
+            output.append(LabeledSample(build_feature_row(core, side, prior_close=prior, fifteen_bar_close=prior_15), label))
         return tuple(output)
 
     def _analyses_at(self, as_of, bars, closed, symbol: str):  # type: ignore[no-untyped-def]

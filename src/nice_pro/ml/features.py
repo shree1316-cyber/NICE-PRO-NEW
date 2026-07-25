@@ -11,9 +11,36 @@ from nice_pro.engines.indicators import IST
 from nice_pro.models.market import IndicatorSnapshot, Side
 
 
+CORE_ML_CONTRACT = "core_candle_only_v2"
+
+
+def derive_core_ml_side(snapshot: IndicatorSnapshot) -> Side:
+    """Return the Core-ML candidate direction from candle features only.
+
+    This deliberately does *not* read the 308D rule score, MTF gate, option
+    chain, Hero, scalp, or another ML score.  It is the direction used both
+    when creating historical labels and when Core ML evaluates a live cached
+    five-minute snapshot.
+    """
+    close = snapshot.close
+    if close is None:
+        return Side.NEUTRAL
+    fast = snapshot.ema_fast
+    slow = snapshot.ema_slow
+    vwap = snapshot.vwap
+    rsi = snapshot.rsi
+    bullish = sum((fast is not None and slow is not None and fast > slow, vwap is not None and close > vwap, rsi is not None and rsi >= 52))
+    bearish = sum((fast is not None and slow is not None and fast < slow, vwap is not None and close < vwap, rsi is not None and rsi <= 48))
+    if bullish >= 2 and bullish > bearish:
+        return Side.BUY
+    if bearish >= 2 and bearish > bullish:
+        return Side.SELL
+    return Side.NEUTRAL
+
+
 def build_feature_row(
     snapshot: IndicatorSnapshot,
-    side: Side,
+    side: Side | None = None,
     *,
     prior_close: float | None = None,
     fifteen_bar_close: float | None = None,
@@ -23,6 +50,9 @@ def build_feature_row(
     Option/depth/CVD fields are intentionally excluded here: Kite does not provide
     their historical time series. They can join a later live-journal model only.
     """
+    # ``side`` is optional only for callers that need to replay an archived
+    # v1 model.  All v2 Core-ML callers use this engine's own direction.
+    own_side = derive_core_ml_side(snapshot) if side is None else side
     close = snapshot.close or 0.0
     atr = max(snapshot.atr or 0.0, close * 0.0001, 1e-9)
     regime = derive_regime(snapshot)
@@ -52,11 +82,11 @@ def build_feature_row(
         "session_fraction": session_fraction,
         "session_sin": sin(2 * pi * session_fraction),
         "session_cos": cos(2 * pi * session_fraction),
-        "side_buy": float(side is Side.BUY),
-        "side_sell": float(side is Side.SELL),
+        "side_buy": float(own_side is Side.BUY),
+        "side_sell": float(own_side is Side.SELL),
     }
     values.update(regime.values)
-    return FeatureRow(snapshot.calculated_at, snapshot.symbol, side, regime.regime, values)
+    return FeatureRow(snapshot.calculated_at, snapshot.symbol, own_side, regime.regime, values)
 
 
 def _range_position(value: float, low: float | None, high: float | None) -> float:

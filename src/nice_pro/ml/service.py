@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from nice_pro.ml.features import build_feature_row
+from nice_pro.ml.features import CORE_ML_CONTRACT, build_feature_row, derive_core_ml_side
 from nice_pro.ml.inference import ShadowInferenceEngine
 from nice_pro.ml.registry import ModelRegistry
 from nice_pro.ml.runtime import MLDependencyError
@@ -46,6 +46,14 @@ class MLShadowService:
             self._model_mtimes.pop(key, None)
             self._load_errors[key] = "MODEL NOT TRAINED"
             return None
+        metadata_path = self._directory / f"{model_name}.json"
+        # A v1 file was trained with the 308D rule direction. It must never be
+        # presented as an independent Core-ML result.
+        if not metadata_path.exists() or CORE_ML_CONTRACT not in metadata_path.read_text(encoding="utf-8"):
+            self._engines.pop(key, None)
+            self._model_mtimes.pop(key, None)
+            self._load_errors[key] = "CORE ML RE-TRAIN REQUIRED"
+            return None
         modified = model_path.stat().st_mtime_ns
         if self._model_mtimes.get(key) == modified:
             return self._engines.get(key)
@@ -59,8 +67,9 @@ class MLShadowService:
             self._load_errors[key] = "MODEL UNAVAILABLE"
         return self._engines.get(key)
 
-    def evaluate(self, underlying: str, analysis: IndicatorSnapshot, side: Side) -> MLShadowStatus:
-        row = build_feature_row(analysis, side)
+    def evaluate(self, underlying: str, analysis: IndicatorSnapshot) -> MLShadowStatus:
+        # No input from the 308D policy or option engines is accepted here.
+        row = build_feature_row(analysis)
         engine = self._engine_for(underlying)
         if engine is None:
             return MLShadowStatus(
@@ -70,7 +79,7 @@ class MLShadowService:
                 self._load_errors.get(underlying.upper(), "MODEL NOT TRAINED"),
                 row.regime.value,
             )
-        if side is Side.NEUTRAL:
-            return MLShadowStatus(underlying, analysis.calculated_at, None, "WAITING FOR RULE DIRECTION", row.regime.value)
+        if derive_core_ml_side(analysis) is Side.NEUTRAL:
+            return MLShadowStatus(underlying, analysis.calculated_at, None, "WAITING FOR CORE ML DIRECTION", row.regime.value)
         result = engine.evaluate(row)
         return MLShadowStatus(underlying, analysis.calculated_at, result.probability, result.status, row.regime.value, result.top_reasons)

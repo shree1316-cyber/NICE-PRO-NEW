@@ -41,8 +41,9 @@ class Application:
         self.option_hero = OptionHeroEngine()
         self.scalp = ScalpEngine()
         self.conviction = ConvictionEngine()
-        # ML reads the existing 5-minute snapshot only. It is display-only and
-        # deliberately independent from the 308D paper-forward policy.
+        # Core ML reads the shared cached 5-minute snapshot only. Its own
+        # candle-only candidate direction is independent of the 308D policy,
+        # option Hero, scalp, and any later Live-Enriched model.
         self.ml_shadow = MLShadowService()
         self.journal = ResearchJournal(settings.journal_database_path)
         self.forward_policy = ForwardTestPolicy(
@@ -354,9 +355,7 @@ class Application:
         if analysis is None or options is None:
             return
         snapshot = self.conviction.evaluate(analysis, options, analyses)
-        self._ml_shadow_by_underlying[underlying] = self.ml_shadow.evaluate(
-            underlying, analysis, snapshot.side
-        )
+        self._ml_shadow_by_underlying[underlying] = self.ml_shadow.evaluate(underlying, analysis)
         decision_id: int | None = None
         # Save at most one research-grade decision only for a live completed
         # 5-minute *spot* candle.  This lock prevents concurrent warm-up,
