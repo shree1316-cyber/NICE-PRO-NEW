@@ -1,0 +1,31 @@
+{
+  "model": "Kite Core Directional Backtest",
+  "instrument": "NSE:NIFTY 50",
+  "from": "2026-02-23T09:15:00+05:30",
+  "to": "2026-07-20T15:30:00+05:30",
+  "config": {
+    "minimum_mtf_score": "65",
+    "minimum_grade": "A",
+    "stop_atr_multiple": "1.0",
+    "target_one_r": "1.25",
+    "max_holding_minutes": "90",
+    "entry_start": "09:30:00",
+    "entry_end": "14:45:00"
+  },
+  "summary": {
+    "trades": 466,
+    "wins": 191,
+    "losses": 260,
+    "win_rate": 40.99,
+    "average_r": -0.04,
+    "profit_factor": 0.929,
+    "max_drawdown_r": 35.983
+  },
+  "excluded_live_only_modules": [
+    "10s and 30s execution timing",
+    "historical option-chain Hero inputs",
+    "bid/ask depth and book imbalance",
+    "estimated CVD and OTM continuation",
+    "historical option-premium P/L"
+  ]
+}

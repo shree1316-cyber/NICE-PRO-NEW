@@ -44,7 +44,11 @@ Before a live session, confirm `NICE_SUBSCRIPTIONS` tokens against Kite's latest
 
 Expected offline result: the NICE-PRO desktop window opens with cards for NIFTY, SENSEX, market structure, options, and conviction. It shows that Kite credentials are not configured.
 
+<<<<<<< Updated upstream
 Expected live result: after valid credentials and a live market are available, it connects to Kite, warms recent one-minute history, discovers the complete nearest-expiry NIFTY and SENSEX option chains (within Kite's subscription limit), and updates the cards. It never submits an order.
+=======
+Expected live result: after valid credentials and a live market are available, it connects to Kite, warms recent one-minute history, discovers a narrow ATM option universe, and updates the cards. It never submits an order.
+>>>>>>> Stashed changes
 
 ## 6. Verify the code
 
@@ -69,6 +73,7 @@ only if it has positive average R and profit factor of at least 1.0 in both the
 each. It does not change dashboard weights or place trades. Keep the candidate
 in paper mode for at least 10 trading sessions before considering any change.
 
+<<<<<<< Updated upstream
 ## 8. Controlled 10-session forward-paper test
 
 The default `.env.example` enables `NIFTY_CORE_308D_V1`. It is still strictly
@@ -111,6 +116,8 @@ This is an explainable score of the live data currently observed; it is not a
 profit probability, a prediction, or a guarantee. Any displayed Hero plan is
 paper-only and is never submitted to Zerodha.
 
+=======
+>>>>>>> Stashed changes
 ## Troubleshooting
 
 - **`No module named kiteconnect` or `loguru`:** repeat the install command from step 3.

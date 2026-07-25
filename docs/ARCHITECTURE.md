@@ -23,6 +23,7 @@ The Kite callback runs in KiteTicker's worker thread. It never manipulates widge
 
 At startup, a worker fetches recent one-minute candles to warm the indicators. A failed warm-up is shown in the dashboard but cannot stop live quote handling.
 
+<<<<<<< Updated upstream
 ## Options analytics and feed integrity
 
 After a spot quote arrives, a worker reads Kite's instrument master, selects the nearest valid NIFTY or SENSEX expiry, and subscribes to **every CE/PE contract in that one expiry**. Later expiries are separate chains and are intentionally excluded. The option engine exposes direct LTP, OI, session OI change, best bid/ask, and Kite's available top-five depth. It derives premium velocity, Black–Scholes implied volatility, estimated CVD, OTM continuation, PCR, observed max pain, and ATM straddle from those quotes.
@@ -40,6 +41,15 @@ The dashboard always separates direct and derived fields. In particular:
 The conviction engine combines independent market-structure and option inputs into separately visible bullish and bearish scores. A confidence value measures evidence alignment, not a calibrated probability of profit. The 5-minute core is an audit score; the multi-timeframe gate decides whether a paper plan can be evaluated. A/A+ only creates a **paper-only** candidate plan if an ATM option quote is available, the required live inputs are fresh, and estimated loss per lot is below the configured cap. Audio alerts are cooldown-protected and never submit an order.
 
 Research decisions are captured at most once per completed live 5-minute spot candle. History warm-up and futures-volume warm-up do not create records. A reconnect also clears pending journal capture, preventing a pre-outage candle from being combined with post-reconnect option flow.
+=======
+## Options analytics
+
+After a spot quote arrives, a worker reads Kite's instrument master, selects the nearest valid NIFTY or SENSEX expiry, and subscribes only to two strikes either side of ATM. From the received option quotes the engine exposes OI, session OI change, PCR, premium velocity, and Black–Scholes implied volatility. IV is model-derived from LTP, not supplied directly by the exchange, and should be treated as an estimate.
+
+## Conviction and plans
+
+The conviction engine combines independent market-structure and option inputs into separately visible bullish and bearish scores. A confidence value measures evidence alignment, not a calibrated probability of profit. A/A+ only creates a **paper-only** candidate plan if an ATM option quote is available and estimated loss per lot is below the configured cap. Audio alerts are cooldown-protected and never submit an order.
+>>>>>>> Stashed changes
 
 ## Safety boundary
 

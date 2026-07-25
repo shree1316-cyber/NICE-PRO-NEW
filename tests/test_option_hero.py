@@ -1,6 +1,10 @@
 from datetime import date, datetime, timedelta, timezone
 
+<<<<<<< Updated upstream
 from nice_pro.engines.option_hero import OptionHeroEngine, _grade
+=======
+from nice_pro.engines.option_hero import OptionHeroEngine
+>>>>>>> Stashed changes
 from nice_pro.models.market import OptionChainSnapshot, OptionContract, OptionMetric, OptionType, Side, TradeGrade
 
 
@@ -34,6 +38,7 @@ def test_full_chain_hero_creates_a_risk_capped_paper_call_plan() -> None:
     assert hero.plan is not None
     assert hero.plan.option_symbol == call.symbol
     assert hero.plan.max_loss_per_lot == 1500
+<<<<<<< Updated upstream
 
 
 def test_hero_grade_uses_normalized_100_point_thresholds() -> None:
@@ -77,3 +82,5 @@ def test_hero_plan_waits_for_a_fresh_complete_live_chain() -> None:
     assert hero.grade is TradeGrade.A
     assert hero.plan is None
     assert any("not fully fresh" in item for item in hero.conflicts)
+=======
+>>>>>>> Stashed changes

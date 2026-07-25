@@ -57,6 +57,7 @@ def test_option_chain_reports_direct_depth_and_labelled_estimates() -> None:
     assert chain.atm_book_imbalance == 0.1
     assert chain.atm_estimated_cvd is not None
     assert chain.otm_continuation is not None
+<<<<<<< Updated upstream
 
 
 def test_option_chain_rebases_cvd_until_two_fresh_quotes_arrive() -> None:
@@ -86,3 +87,5 @@ def test_option_chain_rebases_cvd_until_two_fresh_quotes_arrive() -> None:
     )
     assert fresh_chain is not None
     assert fresh_chain.metrics[0].estimated_cvd is not None
+=======
+>>>>>>> Stashed changes

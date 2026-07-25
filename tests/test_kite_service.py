@@ -1,4 +1,8 @@
+<<<<<<< Updated upstream
 from datetime import date, datetime, timedelta, timezone
+=======
+from datetime import date, timedelta
+>>>>>>> Stashed changes
 
 import pytest
 
@@ -41,6 +45,7 @@ def test_current_expiry_option_contracts_returns_all_nearest_strikes(monkeypatch
         (24100.0, OptionType.CALL),
         (24100.0, OptionType.PUT),
     ]
+<<<<<<< Updated upstream
 
 
 def test_stream_health_marks_an_old_live_stream_as_stale() -> None:
@@ -52,3 +57,5 @@ def test_stream_health_marks_an_old_live_stream_as_stale() -> None:
 
     assert health["state"] == "STALE"
     assert health["last_tick_age_seconds"] is not None
+=======
+>>>>>>> Stashed changes
