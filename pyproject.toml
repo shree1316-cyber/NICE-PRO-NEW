@@ -20,6 +20,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.5"]
+ml = [
+  "lightgbm>=4.5",
+  "scikit-learn>=1.5",
+  "joblib>=1.4",
+  "numpy>=1.26",
+]
 
 [project.scripts]
 nice-pro = "nice_pro.__main__:main"
@@ -29,6 +35,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 
 [tool.ruff]
 line-length = 100

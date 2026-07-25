@@ -590,14 +590,17 @@ class MainWindow(QMainWindow):
         bar.setRange(0, 100)
         bar.setTextVisible(False)
         detail = self._muted("Waiting for aligned market and option evidence")
+        ml_shadow = self._muted("ML SHADOW: MODEL NOT TRAINED")
+        ml_shadow.setObjectName("mlShadow")
         details.addWidget(headline)
         details.addWidget(score)
         details.addWidget(timeframe_strip)
         details.addWidget(bar)
         details.addWidget(detail)
+        details.addWidget(ml_shadow)
         content.addLayout(details, 1)
         layout.addLayout(content)
-        return {"panel": panel, "headline": headline, "score": score, "timeframes": timeframe_strip, "bar": bar, "detail": detail, "gauge": gauge}
+        return {"panel": panel, "headline": headline, "score": score, "timeframes": timeframe_strip, "bar": bar, "detail": detail, "ml_shadow": ml_shadow, "gauge": gauge}
 
     def _evidence_card(self, title: str) -> dict[str, object]:
         panel, layout = self._panel(title, "amber")
@@ -786,6 +789,18 @@ class MainWindow(QMainWindow):
             f"5m core: {snapshot.bullish_score}/{snapshot.bearish_score} | {_plan_status(snapshot)}"
 >>>>>>> Stashed changes
         )  # type: ignore[union-attr]
+        ml_shadow = self._application.ml_shadow_status(snapshot.underlying)
+        if ml_shadow is None:
+            ml_text = "ML SHADOW: WAITING FOR CORE SNAPSHOT"
+        elif ml_shadow.score is None:
+            ml_text = f"ML SHADOW: {ml_shadow.status} | Regime: {ml_shadow.regime}"
+        else:
+            drivers = "; ".join(item.split(":", 1)[0] for item in ml_shadow.top_reasons)
+            ml_text = (
+                f"ML SHADOW: {ml_shadow.score:.0%} | {ml_shadow.status} | "
+                f"Regime: {ml_shadow.regime} | Top: {drivers or 'n/a'}"
+            )
+        conviction["ml_shadow"].setText(ml_text)  # type: ignore[union-attr]
         evidence["positive"].setText("+ " + ("\n+ ".join(snapshot.bullish_reasons[:3]) or "No bullish evidence"))  # type: ignore[union-attr]
         evidence["negative"].setText("- " + ("\n- ".join(snapshot.bearish_reasons[:3]) or "No bearish evidence"))  # type: ignore[union-attr]
         caution = ("CAUTION: " + snapshot.conflicts[0]) if snapshot.conflicts else ""
