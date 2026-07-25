@@ -1,0 +1,23 @@
+{
+  "mode": "shadow_only",
+  "underlying": "NIFTY",
+  "from": "2023-01-02T09:15:00+05:30",
+  "to": "2026-07-23T15:30:00+05:30",
+  "candles": 328871,
+  "samples": 19969,
+  "walk_forward": {
+    "folds": 37,
+    "mean_roc_auc": 0.5216509523157083,
+    "mean_precision": 1.0,
+    "mean_expectancy_r": -0.10068198866779912,
+    "mean_profit_factor": 0.8510095265251435
+  },
+  "calibration": {
+    "roc_auc": 0.5567728375241863,
+    "average_precision": 0.39412770519807805,
+    "brier_score": 0.2263976385655185
+  },
+  "model": "data\\ml_models\\latest_shadow_nifty.joblib",
+  "metadata": "data\\ml_models\\latest_shadow_nifty.json",
+  "notice": "ML score is display-only. It does not change the 308D policy or submit orders."
+}
