@@ -553,6 +553,7 @@ class MainWindow(QMainWindow):
         detail = self._muted("Waiting for aligned market and option evidence")
         ml_shadow = self._muted("CORE ML: MODEL NOT TRAINED")
         ml_shadow.setObjectName("mlShadow")
+        ml_shadow.setWordWrap(True)
         details.addWidget(headline)
         details.addWidget(score)
         details.addWidget(timeframe_strip)
@@ -742,7 +743,7 @@ class MainWindow(QMainWindow):
         else:
             drivers = "; ".join(item.split(":", 1)[0] for item in ml_shadow.top_reasons)
             ml_text = (
-                f"CORE ML: {ml_shadow.score:.0%} | {ml_shadow.status} | "
+                f"CORE ML SHADOW: {ml_shadow.score:.0%} | {ml_shadow.status} | "
                 f"Regime: {ml_shadow.regime} | Top: {drivers or 'n/a'}"
             )
         conviction["ml_shadow"].setText(ml_text)  # type: ignore[union-attr]
@@ -1469,6 +1470,7 @@ QLabel#convictionBox { color: #dce8f6; font-size: 12px; font-weight: 700; paddin
 QLabel#scoreText { color: #dce8f6; font-size: 11px; font-weight: 800; }
 QLabel#mtfScoreBadge { background: #102b46; color: #d8b4fe; border: 1px solid #6d42a3; border-radius: 5px; padding: 3px 10px; font-size: 12px; font-weight: 900; }
 QLabel#timeframeStrip { color: #dce8f6; font-size: 10px; font-weight: 800; padding: 1px 0; }
+QLabel#mlShadow { color: #f5d0fe; font-size: 12px; font-weight: 900; padding: 3px 6px; background: #1b1838; border: 1px solid #7c3aed; border-radius: 4px; }
 QLabel#workspaceReasons, QLabel#workspacePlan, QLabel#chainSummary { color: #dce8f6; font-size: 12px; }
 QLabel#optionHero { color: #dce8f6; font-size: 11px; padding: 6px 8px; }
 QLabel#scalpBox { color: #dce8f6; font-size: 11px; padding: 6px 8px; }
