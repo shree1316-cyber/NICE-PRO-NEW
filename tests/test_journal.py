@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+import json
+import sqlite3
 
 from nice_pro.journal.store import ResearchJournal
 from nice_pro.models.market import (
@@ -30,6 +32,25 @@ def test_journal_preserves_decision_time_inputs(tmp_path):
     assert identifier > 0
     assert decisions[0]["underlying"] == "NIFTY"
     assert decisions[0]["mtf_score"] == 70
+
+
+def test_journal_preserves_ml_observation_layers(tmp_path):
+    path = tmp_path / "journal.sqlite3"
+    journal = ResearchJournal(path)
+    journal.capture_decision(
+        _conviction(),
+        {300: IndicatorSnapshot("NSE:NIFTY 50", MarketRegime.TREND_UP, datetime.now(timezone.utc))},
+        _chain(),
+        None,
+        None,
+        core_ml={"contract": "core_candle_only_v2", "score": 0.55, "status": "SHADOW OBSERVE"},
+        live_enriched={"contract": "live_enriched_observation_v1", "status": "COLLECTING_ONLY_NOT_TRAINED"},
+    )
+    with sqlite3.connect(path) as connection:
+        raw_payload = connection.execute("SELECT payload_json FROM journal_records WHERE record_type = 'DECISION'").fetchone()[0]
+    payload = json.loads(raw_payload)
+    assert payload["core_ml_shadow"]["score"] == 0.55
+    assert payload["live_enriched"]["status"] == "COLLECTING_ONLY_NOT_TRAINED"
 
 
 def test_paper_tracker_records_target_one_as_observed_win(tmp_path):

@@ -16,6 +16,12 @@ three engines never use one another's score, direction, or eligibility:
   option-chain/depth/microstructure values only after enough labelled live
   observations exist. It will not consume either existing engine's score.
 
+Every completed live five-minute decision now records a versioned
+`live_enriched_observation_v1` envelope alongside the full timeframe and
+option-chain payload. It is collection-only, not a trained model or a trade
+filter. Each record includes chain coverage/freshness, PCR/OI/IV context,
+spread, book-imbalance, estimated-CVD and OTM-continuation provenance.
+
 Core ML v2 requires a fresh train. Older Core ML files were trained using a
 rule-derived direction and are deliberately displayed as `CORE ML RE-TRAIN
 REQUIRED` rather than being treated as independent.

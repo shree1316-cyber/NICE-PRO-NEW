@@ -20,6 +20,7 @@ from nice_pro.engines.options import OptionChainEngine
 from nice_pro.engines.option_hero import OptionHeroEngine
 from nice_pro.engines.scalp import ScalpEngine
 from nice_pro.journal.store import ResearchJournal
+from nice_pro.ml.enriched import build_live_enriched_observation
 from nice_pro.ml.service import MLShadowService, MLShadowStatus
 from nice_pro.models.market import Candle, ConvictionSnapshot, IndicatorSnapshot, MarketSnapshot, OptionChainSnapshot, OptionHeroSnapshot, Quote, ScalpSnapshot
 from nice_pro.papertrade.policy import ForwardTestPolicy
@@ -355,7 +356,8 @@ class Application:
         if analysis is None or options is None:
             return
         snapshot = self.conviction.evaluate(analysis, options, analyses)
-        self._ml_shadow_by_underlying[underlying] = self.ml_shadow.evaluate(underlying, analysis)
+        core_ml = self.ml_shadow.evaluate(underlying, analysis)
+        self._ml_shadow_by_underlying[underlying] = core_ml
         decision_id: int | None = None
         # Save at most one research-grade decision only for a live completed
         # 5-minute *spot* candle.  This lock prevents concurrent warm-up,
@@ -368,7 +370,22 @@ class Application:
             ):
                 hero = self.option_hero.evaluate(options)
                 scalp = self.scalp.evaluate(options, analyses)
-                decision_id = self.journal.capture_decision(snapshot, analyses, options, hero, scalp)
+                decision_id = self.journal.capture_decision(
+                    snapshot,
+                    analyses,
+                    options,
+                    hero,
+                    scalp,
+                    core_ml={
+                        "status": core_ml.status,
+                        "score": core_ml.score,
+                        "regime": core_ml.regime,
+                        "calculated_at": core_ml.calculated_at.isoformat(),
+                        "top_reasons": list(core_ml.top_reasons),
+                        "contract": "core_candle_only_v2",
+                    },
+                    live_enriched=build_live_enriched_observation(analyses, options),
+                )
                 self._last_journal_candle[underlying] = analysis.calculated_at
                 self._pending_journal_candle.pop(underlying, None)
         opened = self.paper_trades.evaluate(snapshot, options, decision_id)

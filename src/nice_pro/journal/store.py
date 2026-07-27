@@ -60,6 +60,8 @@ class ResearchJournal:
         chain: OptionChainSnapshot,
         hero: OptionHeroSnapshot | None,
         scalp: ScalpSnapshot | None,
+        core_ml: Mapping[str, Any] | None = None,
+        live_enriched: Mapping[str, Any] | None = None,
     ) -> int:
         """Save every field needed to reconstruct a later paper decision."""
         payload = {
@@ -71,6 +73,10 @@ class ResearchJournal:
             "option_chain": _chain_payload(chain),
             "hero": _hero_payload(hero),
             "scalp": _scalp_payload(scalp),
+            # Both are observation-only research layers.  They never alter
+            # the 308D policy decision captured above.
+            "core_ml_shadow": dict(core_ml) if core_ml is not None else None,
+            "live_enriched": dict(live_enriched) if live_enriched is not None else None,
         }
         return self._insert("DECISION", conviction.underlying, payload)
 
