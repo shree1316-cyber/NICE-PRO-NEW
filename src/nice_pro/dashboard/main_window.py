@@ -439,6 +439,13 @@ class MainWindow(QMainWindow):
         self._report_policy = self._muted("Forward-test policy loading")
         policy_layout.addWidget(self._report_policy)
         layout.addWidget(policy)
+        readiness, readiness_layout = self._panel("LIVE-ENRICHED ML DATA READINESS (OBSERVATION ONLY)", "purple")
+        self._enriched_readiness = self._muted("Collecting decision-time feature snapshots.")
+        readiness_layout.addWidget(self._enriched_readiness)
+        readiness_layout.addWidget(self._muted(
+            "Read-only progress: this panel never trains, scores, or changes the 308D policy."
+        ))
+        layout.addWidget(readiness)
         method, method_layout = self._panel("OPTIMISATION & REVERSE-ENGINEERING DATA", "amber")
         method_layout.addWidget(self._muted(
             "For each saved decision, NICE-PRO retains: 10s/30s/1m/5m/15m/30m/1h regimes and readings; category-level matrix states; core and MTF scores; gate/alignment; bullish, bearish and conflict reasons; ATM plan; PCR, OI and OI changes; IV/skew, expected move, spread, book imbalance, estimated CVD, OTM continuation; Hero and Scalp scores."
@@ -1013,6 +1020,19 @@ class MainWindow(QMainWindow):
                 f"Time exits: {report['time_exits']} | Observed win rate: {rate} | Net P/L per lot: ₹{report['net_pnl_per_lot']:,.0f} | Average: {average_r}"
             )
         self._report_summary.setText(summary)
+        if hasattr(self, "_enriched_readiness"):
+            readiness = self._application.journal.live_enriched_readiness()
+            thresholds = readiness["thresholds"]
+            lines = []
+            for market in ("NIFTY", "SENSEX"):
+                item = readiness["markets"][market]
+                lines.append(
+                    f"{market}: {item['status']} | sessions {item['sessions']}/{thresholds['sessions_for_shadow']} | "
+                    f"snapshots {item['snapshots']:,}/{thresholds['snapshots_for_shadow']:,} | "
+                    f"complete {item['complete_snapshots']:,} | fields {item['field_coverage_percent']:.1f}% | "
+                    f"fresh chain {item['fresh_chain_percent']:.1f}% | linked outcomes {item['linked_outcomes']}/{thresholds['linked_outcomes_for_validation']}"
+                )
+            self._enriched_readiness.setText("\n".join(lines))
         by_market = report["by_underlying"]
         if by_market:
             self._report_by_market.setText("\n".join(

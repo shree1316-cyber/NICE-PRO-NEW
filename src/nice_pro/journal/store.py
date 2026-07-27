@@ -288,6 +288,101 @@ class ResearchJournal:
             "method_note": "Observed paper outcomes only. Win rate excludes time exits; optimise only after an adequate out-of-sample sample.",
         }
 
+    def live_enriched_readiness(self) -> dict[str, Any]:
+        """Return read-only data-quality progress for the future enriched model.
+
+        This deliberately inspects stored decision snapshots only.  It neither
+        trains a model nor changes any live, rule, or paper-trading behaviour.
+        """
+        decisions = self._query(
+            "SELECT id, created_at, underlying, payload_json FROM journal_records "
+            "WHERE record_type = 'DECISION' ORDER BY id ASC",
+            (),
+        )
+        opens = self._query(
+            "SELECT id, payload_json FROM journal_records WHERE record_type = 'PAPER_OPEN'",
+            (),
+        )
+        closes = self._query(
+            "SELECT payload_json FROM journal_records WHERE record_type = 'PAPER_CLOSE'",
+            (),
+        )
+        decision_for_open = {
+            int(open_id): int(payload["decision_id"])
+            for open_id, raw_payload in opens
+            for payload in (json.loads(raw_payload),)
+            if payload.get("decision_id") is not None
+        }
+        resolved_decisions = {
+            decision_for_open[int(payload["open_id"])]
+            for (raw_payload,) in closes
+            for payload in (json.loads(raw_payload),)
+            if payload.get("open_id") is not None and int(payload["open_id"]) in decision_for_open
+        }
+        required = (
+            "pcr_oi", "iv_skew", "expected_move", "atm_bid_ask_spread",
+            "atm_book_imbalance", "estimated_cvd", "otm_continuation",
+            "five_minute_close", "five_minute_atr", "five_minute_rsi",
+            "five_minute_relative_volume",
+        )
+        grouped: dict[str, dict[str, Any]] = {
+            market: {"sessions": set(), "snapshots": 0, "complete": 0, "fresh": 0,
+                     "field_present": 0, "field_total": 0, "linked_outcomes": 0}
+            for market in ("NIFTY", "SENSEX")
+        }
+        for decision_id, created_at, underlying, raw_payload in decisions:
+            payload = json.loads(raw_payload)
+            observation = payload.get("live_enriched") or {}
+            if observation.get("contract") != "live_enriched_observation_v1":
+                continue
+            stats = grouped.setdefault(
+                str(underlying), {"sessions": set(), "snapshots": 0, "complete": 0, "fresh": 0,
+                                  "field_present": 0, "field_total": 0, "linked_outcomes": 0},
+            )
+            features = observation.get("live_features") or {}
+            freshness = observation.get("feature_freshness") or {}
+            present = sum(features.get(name) is not None for name in required)
+            registered = int(freshness.get("registered_contracts") or 0)
+            fresh = int(freshness.get("fresh_contracts") or 0)
+            stats["sessions"].add(_parse_timestamp(created_at).astimezone(_IST).date().isoformat())
+            stats["snapshots"] += 1
+            stats["field_present"] += present
+            stats["field_total"] += len(required)
+            stats["fresh"] += fresh
+            stats.setdefault("registered", 0)
+            stats["registered"] += registered
+            if present == len(required) and registered > 0 and fresh >= registered:
+                stats["complete"] += 1
+            if int(decision_id) in resolved_decisions:
+                stats["linked_outcomes"] += 1
+        markets: dict[str, dict[str, Any]] = {}
+        for market, stats in grouped.items():
+            sessions = len(stats["sessions"])
+            snapshots = int(stats["snapshots"])
+            coverage = round(100 * stats["field_present"] / stats["field_total"], 1) if stats["field_total"] else 0.0
+            freshness = round(100 * stats["fresh"] / stats.get("registered", 0), 1) if stats.get("registered", 0) else 0.0
+            outcomes = int(stats["linked_outcomes"])
+            if sessions >= 60 and snapshots >= 1_000 and coverage >= 90 and outcomes >= 100:
+                status = "READY FOR VALIDATION"
+            elif sessions >= 20 and snapshots >= 1_000 and coverage >= 90:
+                status = "READY FOR SHADOW TRAINING"
+            else:
+                status = "COLLECTING"
+            markets[market] = {
+                "status": status, "sessions": sessions, "snapshots": snapshots,
+                "complete_snapshots": int(stats["complete"]), "field_coverage_percent": coverage,
+                "missing_data_percent": round(100 - coverage, 1),
+                "fresh_chain_percent": freshness, "linked_outcomes": outcomes,
+            }
+        return {
+            "contract": "live_enriched_observation_v1",
+            "thresholds": {"sessions_for_shadow": 20, "snapshots_for_shadow": 1_000,
+                           "coverage_percent": 90, "sessions_for_validation": 60,
+                           "linked_outcomes_for_validation": 100},
+            "markets": markets,
+            "note": "Read-only readiness only. Linked outcomes are resolved 308D paper positions; no enriched model is trained or scored.",
+        }
+
     def _create_schema(self) -> None:
         with self._connect() as connection:
             connection.execute(

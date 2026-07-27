@@ -53,6 +53,28 @@ def test_journal_preserves_ml_observation_layers(tmp_path):
     assert payload["live_enriched"]["status"] == "COLLECTING_ONLY_NOT_TRAINED"
 
 
+def test_live_enriched_readiness_is_read_only_progress(tmp_path):
+    journal = ResearchJournal(tmp_path / "journal.sqlite3")
+    journal.capture_decision(
+        _conviction(),
+        {300: IndicatorSnapshot("NSE:NIFTY 50", MarketRegime.TREND_UP, datetime.now(timezone.utc))},
+        _chain(), None, None,
+        live_enriched={
+            "contract": "live_enriched_observation_v1",
+            "feature_freshness": {"registered_contracts": 1, "fresh_contracts": 1},
+            "live_features": {name: 1.0 for name in (
+                "pcr_oi", "iv_skew", "expected_move", "atm_bid_ask_spread", "atm_book_imbalance",
+                "estimated_cvd", "otm_continuation", "five_minute_close", "five_minute_atr",
+                "five_minute_rsi", "five_minute_relative_volume",
+            )},
+        },
+    )
+    readiness = journal.live_enriched_readiness()
+    assert readiness["markets"]["NIFTY"]["snapshots"] == 1
+    assert readiness["markets"]["NIFTY"]["field_coverage_percent"] == 100.0
+    assert readiness["markets"]["NIFTY"]["status"] == "COLLECTING"
+
+
 def test_paper_tracker_records_target_one_as_observed_win(tmp_path):
     journal = ResearchJournal(tmp_path / "journal.sqlite3")
     plan = TradePlan("NIFTY", Side.BUY, "NIFTYTESTCE", 100, 90, 110, 120, 500, 50)
